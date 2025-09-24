@@ -4,4 +4,5 @@ __pycache__/
 *.db
 *.csv
 tender_portal/data/
+.venv/
 tender_portal/uploads/
