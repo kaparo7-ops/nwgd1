@@ -12,6 +12,7 @@ This repository contains a lightweight web application for managing tenders, bid
 - **Dashboards & reports** – consolidated metrics, upcoming calendar milestones, and financial pipeline snapshots.
 - **Notifications** – automatic alerts for closing tenders, overdue invoices, and expiring guarantees.
 - **Bilingual UI** – toggle Arabic/English labels instantly from the client.
+- **Sample dataset** – first run seeds realistic tenders, projects, suppliers, invoices, and alerts so the dashboards are immediately informative.
 
 ## Preparing a fresh Ubuntu 22.04 host
 
@@ -116,6 +117,18 @@ space ready for future packages.
    | Viewer (read only)  | `viewer`      | `Viewer123!`   |
 
    Each role exposes the relevant parts of the system (tenders, finance, reports, etc.).
+
+## Demo dataset
+
+The first time the API starts with an empty SQLite database it automatically loads a small but realistic dataset:
+
+- Key suppliers for construction, logistics, and renewable energy work.
+- Four tenders across RFQ/ITB/RFP types with mixed statuses and upcoming deadlines.
+- Two linked projects with financial data, guarantees, and assigned suppliers.
+- Invoices that drive the finance pipeline and trigger overdue alerts.
+- Notifications for tenders closing soon, guarantees about to expire, and unpaid invoices.
+
+This seeded content ensures the new dashboard and reports render meaningful charts immediately after deployment. To start from a clean slate, delete `tender_portal/data/portal.db` (and any uploaded files) before restarting the server.
 
 ## Project structure
 
