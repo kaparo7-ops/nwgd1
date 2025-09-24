@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.sqlite3
+*.db
+*.csv
+tender_portal/data/
+tender_portal/uploads/
