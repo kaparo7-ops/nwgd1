@@ -11,6 +11,7 @@ import type {
   Tender,
   TenderActivity,
   TenderPricingLine,
+
   User
 } from "@/utils/types";
 
@@ -93,12 +94,14 @@ const pricingLine = (
   total: Math.round(unitCost * quantity * (1 + margin / 100) + shipping)
 });
 
+
 export const tenders: Tender[] = [
   {
     id: "tender-1",
     reference: "UNDP-LBY-2024-017",
     title: "Rehabilitation of Primary Health Clinics",
     tenderType: "ITB",
+
     agency: "UNDP",
     amount: 480000,
     currency: "USD",
@@ -209,6 +212,7 @@ export const tenders: Tender[] = [
       siteVisitOverdue: false,
       guaranteeAlert: date(120)
     },
+
     description:
       "Civil works and supply of equipment for three clinics in Sabha and Benghazi."
   },
@@ -217,6 +221,7 @@ export const tenders: Tender[] = [
     reference: "UNICEF-LBY-ITB-2024-221",
     title: "WASH Supplies Framework",
     tenderType: "ITB",
+
     agency: "UNICEF",
     amount: 275000,
     currency: "EUR",
@@ -304,13 +309,14 @@ export const tenders: Tender[] = [
       siteVisitOverdue: false,
       guaranteeAlert: null
     },
-    description: "Multi-lot procurement of hygiene kits and water trucking."
+
   },
   {
     id: "tender-3",
     reference: "IOM-LBY-RFP-2024-044",
     title: "Shelter Upgrades in Tripoli",
     tenderType: "RFP",
+
     agency: "IOM",
     amount: 610000,
     currency: "USD",
@@ -439,6 +445,7 @@ export const tenders: Tender[] = [
       siteVisitOverdue: false,
       guaranteeAlert: date(45)
     },
+
     description: "Design and build modular shelters for IDP sites."
   }
 ];

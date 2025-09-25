@@ -124,6 +124,7 @@ space ready for future packages.
    Adjust `User=` if the service should run under a dedicated account. The portal will now auto-start on boot and can be
    managed with `sudo systemctl status|stop|restart tender-portal.service`.
 
+
 ## Frontend (React + Vite)
 
 The SPA lives under `frontend/` and uses React 18, Vite, Tailwind CSS, shadcn/ui primitives, lucide-react icons, Recharts, and React Query. Install Node.js 18+ and then run:
@@ -175,6 +176,7 @@ frontend/
 
 3. **Open the web client** by visiting the Vite URL above (or the deployed static host) in your browser.
 
+
 4. **Sign in** with one of the demo users:
 
    | Role                | Username      | Password       |
@@ -217,6 +219,7 @@ frontend/
     ├── services/             # Mock API with localStorage persistence
     ├── theme/                # Global colour/spacing/typography tokens
     └── __tests__/            # Vitest smoke tests for dashboard + data table
+
 
 tender_portal/
 ├── __init__.py

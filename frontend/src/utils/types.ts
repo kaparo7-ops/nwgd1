@@ -87,6 +87,7 @@ export type TenderAlerts = {
   guaranteeAlert?: string | null;
 };
 
+
 export type ProjectStatus = "planning" | "executing" | "delayed" | "closed";
 
 export type InvoiceStatus = "draft" | "submitted" | "paid" | "overdue";
@@ -96,6 +97,7 @@ export type Tender = {
   reference: string;
   title: string;
   tenderType: TenderType;
+
   agency: string;
   amount: number;
   currency: string;
@@ -115,6 +117,7 @@ export type Tender = {
   pricing: TenderPricing;
   supplierComparisons: SupplierComparison[];
   alerts: TenderAlerts;
+
   description: string;
 };
 

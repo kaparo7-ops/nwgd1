@@ -33,11 +33,6 @@ export type DictionaryKey =
   | "save"
   | "cancel"
   | "name"
-  | "reference"
-  | "agency"
-  | "quantity"
-  | "unitCost"
-  | "description"
   | "status"
   | "owner"
   | "dueDate"
@@ -84,6 +79,7 @@ export type DictionaryKey =
   | "notAvailable"
   | "links"
   | "tagsPlaceholder"
+
   | "languageSwitch"
   | "commandPalettePlaceholder"
   | "presetSaved"
@@ -175,6 +171,7 @@ const dictionaries: Record<Locale, Dictionary> = {
     notAvailable: "Not available",
     links: "Links",
     tagsPlaceholder: "e.g. construction, UNDP",
+
     languageSwitch: "العربية",
     commandPalettePlaceholder: "Search navigation, tenders, suppliers...",
     presetSaved: "Filter preset saved",
@@ -256,6 +253,7 @@ const dictionaries: Record<Locale, Dictionary> = {
     notAvailable: "غير متوفر",
     links: "الروابط",
     tagsPlaceholder: "مثال: إنشاءات، الأمم المتحدة",
+
     languageSwitch: "English",
     commandPalettePlaceholder: "ابحث في الصفحات والمناقصات...",
     presetSaved: "تم حفظ المرشح",

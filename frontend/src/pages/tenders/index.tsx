@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   exportTendersCsv,
@@ -11,6 +12,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import {
   Badge
 } from "@/components/ui/badge";
+from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ModalForm } from "@/components/forms/modal-form";
 import { Input } from "@/components/ui/input";
@@ -114,6 +116,7 @@ const createAttachmentFromFile = (file: File, uploader: string): Attachment => (
       : undefined
 });
 
+
 export function TendersPage() {
   const queryClient = useQueryClient();
   const { data, isLoading, isError } = useQuery({
@@ -137,6 +140,7 @@ export function TendersPage() {
       return;
     }
     setSelectedTender(data[0]);
+
   }, [data, selectedTender]);
 
   const saveMutation = useMutation({
@@ -144,12 +148,14 @@ export function TendersPage() {
     onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: ["tenders"] });
       setSelectedTender(updated);
+
     }
   });
 
   const attachmentMutation = useMutation({
     mutationFn: ({ tenderId, files }: { tenderId: string; files: FileList }) =>
       uploadAttachment(tenderId, files, user.name),
+
     onSuccess: (attachments, variables) => {
       queryClient.invalidateQueries({ queryKey: ["tenders"] });
       setSelectedTender((prev) =>
@@ -713,6 +719,7 @@ export function TendersPage() {
 
   const tableData = data ?? [];
 
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -774,6 +781,7 @@ export function TendersPage() {
               <Textarea name="statusReason" placeholder={t("statusReason")} rows={2} />
               <Input name="tags" placeholder={t("tagsPlaceholder")} />
               <Textarea name="description" placeholder={t("description") ?? "Description"} rows={3} />
+
             </form>
           </ModalForm>
         ) : null}
@@ -787,6 +795,7 @@ export function TendersPage() {
         filterDefinitions={filterDefinitions}
         onExportCsv={exportTendersCsv}
         emptyState={<div className="text-sm text-slate-500">{t("noResults")}</div>}
+
         onRowClick={(row) => setSelectedTender(row)}
       />
       {selectedTender ? (
@@ -1134,6 +1143,7 @@ export function TendersPage() {
                 }
               />
             </div>
+
           </div>
         </div>
       ) : null}

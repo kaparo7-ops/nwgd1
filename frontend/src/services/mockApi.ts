@@ -22,6 +22,7 @@ import type {
   Tender,
   TenderActivity,
   TenderPricing,
+
   User
 } from "@/utils/types";
 
@@ -207,6 +208,7 @@ export async function saveTender(
 
   persist(database);
   return updated;
+
 }
 
 export async function uploadAttachment(
@@ -286,6 +288,7 @@ export async function appendTenderActivity(
   return database.tenders[tenderIndex];
 }
 
+
 export async function listProjects(): Promise<Project[]> {
   await latency();
   return database.projects;
@@ -330,6 +333,7 @@ export async function exportTendersCsv(): Promise<string> {
     "Site visit",
     "Technical link",
     "Financial link"
+
   ];
   const rows = database.tenders.map((tender) => [
     tender.reference,
@@ -348,6 +352,7 @@ export async function exportTendersCsv(): Promise<string> {
     tender.siteVisit?.date ?? "",
     tender.proposals.technicalUrl ?? "",
     tender.proposals.financialUrl ?? ""
+
   ]);
   return [header, ...rows]
     .map((row) => row.map((cell) => `"${cell}"`).join(","))
