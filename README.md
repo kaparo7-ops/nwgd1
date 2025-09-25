@@ -11,8 +11,12 @@ This repository contains a lightweight web application for managing tenders, bid
 - **Role-based access** – demo accounts for admin, procurement, finance, project manager, and read-only viewer roles.
 - **Dashboards & reports** – consolidated metrics, upcoming calendar milestones, and financial pipeline snapshots.
 - **Notifications** – automatic alerts for closing tenders, overdue invoices, and expiring guarantees.
+- **Bilingual UI** – toggle Arabic/English labels instantly from the client. Every component flips direction (LTR/RTL) and typography using shared theme tokens.
+- **Sample dataset** – first run seeds realistic tenders, projects, suppliers, invoices, and alerts so the dashboards are immediately informative.
+- **Modern SPA** – React + Vite + Tailwind CSS with shadcn/ui primitives, lucide-react icons, Recharts visualisations, and React Query caching.
 - **Bilingual UI** – toggle Arabic/English labels instantly from the client.
 - **Sample dataset** – first run seeds realistic tenders, projects, suppliers, invoices, and alerts so the dashboards are immediately informative.
+
 
 ## Preparing a fresh Ubuntu 22.04 host
 
@@ -123,6 +127,45 @@ space ready for future packages.
    Adjust `User=` if the service should run under a dedicated account. The portal will now auto-start on boot and can be
    managed with `sudo systemctl status|stop|restart tender-portal.service`.
 
+
+## Frontend (React + Vite)
+
+The SPA lives under `frontend/` and uses React 18, Vite, Tailwind CSS, shadcn/ui primitives, lucide-react icons, Recharts, and React Query. Install Node.js 18+ and then run:
+
+```bash
+cd frontend
+npm install                # install dependencies
+npm run dev                # start the Vite dev server on http://localhost:5173
+npm run build              # produce production assets under frontend/dist
+npm run preview            # preview the built bundle locally
+npm run lint               # ESLint (TypeScript + React hooks rules)
+npm run test               # Vitest smoke tests (React Testing Library)
+```
+
+### UI quick start
+
+- **Language toggle** – switch between English and Arabic from the header. Layout direction, fonts, and badge alignment flip instantly, and the preference is saved in `localStorage`.
+- **Command palette** – press <kbd>Ctrl/Cmd</kbd> + <kbd>K</kbd> to jump to Dashboard, Tenders, Projects, Suppliers, Finance, Reports, or Admin.
+- **Filters drawer** – every data table has a sticky-header layout with search, multi-select filters, saveable presets, pagination, CSV export, empty-state messaging, and virtualization for large datasets.
+- **Data export** – download pipeline CSVs from the tenders table or the Reports page. Attachments can be uploaded with inline previews.
+- **RTL-aware charts** – Recharts line/bar charts mirror labels when Arabic is active, ensuring correct axis reading.
+- **Access control demo** – pick a role in the header to see actions hide/disable for Procurement, Finance, Project, Admin, or Viewer personas.
+
+### Frontend folder structure
+
+```
+frontend/
+  src/
+    components/      # shadcn-inspired UI primitives, advanced table, forms, charts, overlays
+    pages/           # dashboard, tenders, projects, suppliers, finance, reports, admin
+    services/        # mock API backed by the seeded dataset + localStorage persistence
+    providers/       # language (i18n + RTL) and role/permission contexts
+    theme/           # design tokens for colours, typography, spacing, radius, shadows
+    __tests__/       # Vitest smoke tests with React Testing Library helpers
+```
+
+`npm run build` outputs static assets that can be served behind the Python API (copy `frontend/dist` to your web server or configure the backend to serve the files directly).
+
 ## Getting started
 
 1. **Install requirements** (only the Python standard library is used, so no external packages are necessary).
@@ -132,9 +175,12 @@ space ready for future packages.
    python -m tender_portal.server
    ```
 
+
+
+3. **Open the web client** by visiting the Vite URL above (or the deployed static host) in your browser.
+
    The server listens on `http://0.0.0.0:8000` by default. Static assets are served from `frontend/`.
 
-3. **Open the web client** by visiting `http://localhost:8000/` in your browser.
 
 4. **Sign in** with one of the demo users:
 
@@ -163,10 +209,22 @@ This seeded content ensures the new dashboard and reports render meaningful char
 ## Project structure
 
 ```
-frontend/            # HTML/CSS/JS single-page client
-└── app.js           # SPA logic (API calls, rendering, i18n)
-└── index.html
-└── styles.css
+frontend/
+├── index.html                # Vite entry point with font preloads
+├── package.json              # React/Vite/Tailwind dependencies and scripts
+├── tailwind.config.ts        # Design tokens and custom variants
+├── vite.config.ts            # Vite + Vitest configuration
+└── src/
+    ├── App.tsx               # Mounts the router shell
+    ├── index.css             # Tailwind base styles and scrollbar tweaks
+    ├── components/           # shadcn-style UI primitives, data table, charts, overlays
+    ├── data/                 # Seed dataset used by the mock API
+    ├── pages/                # Dashboard, Tenders, Projects, Suppliers, Finance, Reports, Admin
+    ├── providers/            # Language + auth context providers
+    ├── services/             # Mock API with localStorage persistence
+    ├── theme/                # Global colour/spacing/typography tokens
+    └── __tests__/            # Vitest smoke tests for dashboard + data table
+
 
 tender_portal/
 ├── __init__.py
@@ -182,11 +240,9 @@ tests/
 
 ## Running the tests
 
-The project ships with a `unittest` suite that exercises authentication, tender/project lifecycle, and notification generation.
+- **Backend** – `python -m unittest`
+- **Frontend** – `cd frontend && npm run test`
 
-```bash
-python -m unittest
-```
 
 ## Data storage
 
