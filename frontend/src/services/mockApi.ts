@@ -207,6 +207,7 @@ export async function saveTender(
 
   persist(database);
   return updated;
+
 }
 
 export async function uploadAttachment(
@@ -403,6 +404,7 @@ export async function exportTendersCsv(options?: {
 
   return [header, ...rows]
     .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+
     .join("\n");
 }
 

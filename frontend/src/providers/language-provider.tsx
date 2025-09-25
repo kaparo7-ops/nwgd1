@@ -38,6 +38,7 @@ export type DictionaryKey =
   | "quantity"
   | "unitCost"
   | "description"
+
   | "status"
   | "owner"
   | "dueDate"
@@ -136,6 +137,7 @@ const dictionaries: Record<Locale, Dictionary> = {
     tenderType: "Tender type",
     statusReason: "Status reason",
     notes: "Notes",
+
     offerValue: "Offer",
     tags: "Tags",
     siteVisit: "Site visit",
@@ -161,6 +163,7 @@ const dictionaries: Record<Locale, Dictionary> = {
     view: "View",
     edit: "Edit",
     open: "Open",
+
     files: "Files",
     pricing: "Pricing",
     pricingBasis: "Shipping basis",
@@ -172,6 +175,7 @@ const dictionaries: Record<Locale, Dictionary> = {
     reminders: "Reminders",
     submissionReminder: "Submission",
     submissionDate: "Submission date",
+
     specPurchaseReminder: "Specification purchase",
     siteVisitReminder: "Site visit",
     guaranteeReminder: "Guarantee",

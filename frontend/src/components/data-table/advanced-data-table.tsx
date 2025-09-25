@@ -56,6 +56,7 @@ const defaultPreferences: ViewPreferences = {
 };
 
 type AdvancedDataTableProps<TData> = {
+
   data: TData[];
   columns: ColumnDef<TData, any>[];
   isLoading?: boolean;
@@ -65,6 +66,7 @@ type AdvancedDataTableProps<TData> = {
   onFiltersChange?: (filters: Record<string, string[]>) => void;
   filters?: Record<string, string[]>;
   onExportCsv?: (rows: TData[], visibleColumns: string[]) => void | Promise<void>;
+
   emptyState?: React.ReactNode;
   virtualizationThreshold?: number;
   getRowId?: (row: TData, index: number) => string;
@@ -109,6 +111,7 @@ const getColumnId = <TData,>(column: ColumnDef<TData, any>, index: number) => {
   if (column.id) return column.id;
   if (typeof column.accessorKey === "string") return column.accessorKey;
   return `col-${index}`;
+
 };
 
 export function AdvancedDataTable<TData>({
@@ -168,13 +171,14 @@ export function AdvancedDataTable<TData>({
     storedPreferences.activeSavedViewId
   );
 
+
   useEffect(() => {
     if (filters) {
       setInternalFilters(filters);
     }
   }, [filters]);
 
-  useEffect(() => {
+   useEffect(() => {
     const preferences: ViewPreferences = {
       columnVisibility,
       columnPinning,
@@ -195,6 +199,7 @@ export function AdvancedDataTable<TData>({
     viewStorageKey,
     wrapText
   ]);
+
 
   const filteredData = useMemo(() => {
     if (!searchableKeys || globalFilter.trim() === "") return data;
@@ -222,6 +227,7 @@ export function AdvancedDataTable<TData>({
         }
         if (value == null) return false;
         return active.includes(String(value));
+
       })
     );
   }, [filterDefinitions, filteredData, internalFilters]);
@@ -242,6 +248,7 @@ export function AdvancedDataTable<TData>({
     onGlobalFilterChange: setGlobalFilter,
     onColumnVisibilityChange: setColumnVisibility,
     onColumnPinningChange: setColumnPinning,
+
     getRowId
   });
 
@@ -249,12 +256,14 @@ export function AdvancedDataTable<TData>({
   const useVirtual =
     filteredWithFacets.length > virtualizationThreshold && columnPinning.left?.length === 0;
 
+
   const virtualizer = useVirtual
     ? useVirtualizer({
         count: table.getRowModel().rows.length,
         getScrollElement: () => tableContainerRef.current,
         estimateSize: () => (density === "dense" ? 44 : 64),
         overscan: 8
+
       })
     : undefined;
 
@@ -357,6 +366,7 @@ export function AdvancedDataTable<TData>({
   const cellPadding = density === "dense" ? "py-2" : "py-4";
   const wrapClass = wrapText ? "whitespace-normal break-words" : "whitespace-nowrap";
   const fitClass = fitToPage ? "max-w-[220px] truncate" : "";
+
 
   return (
     <div className="space-y-4">
@@ -510,6 +520,7 @@ export function AdvancedDataTable<TData>({
             ) : null}
           </div>
         </div>
+
       </div>
       <div
         ref={tableContainerRef}
@@ -559,6 +570,7 @@ export function AdvancedDataTable<TData>({
                     </th>
                   );
                 })}
+
               </tr>
             ))}
           </thead>
@@ -621,6 +633,7 @@ export function AdvancedDataTable<TData>({
                                 wrapClass
                               )}
                             >
+
                               {flexRender(cell.column.columnDef.cell, cell.getContext())}
                             </div>
                           ))}
@@ -632,6 +645,7 @@ export function AdvancedDataTable<TData>({
               </tr>
             ) : (
               table.getRowModel().rows.map((row, rowIndex) => (
+
                 <tr
                   key={row.id}
                   className={cn(
@@ -672,6 +686,7 @@ export function AdvancedDataTable<TData>({
                       </td>
                     );
                   })}
+
                 </tr>
               ))
             )}
@@ -681,6 +696,7 @@ export function AdvancedDataTable<TData>({
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-500">
         <div>
           {t("rows" as any) ?? "Rows"}: {filteredWithFacets.length} / {data.length}
+
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -694,6 +710,7 @@ export function AdvancedDataTable<TData>({
           <span>
             {t("page" as any) ?? "Page"} {table.getState().pagination.pageIndex + 1} {" "}
             {t("of" as any) ?? "of"} {table.getPageCount()}
+
           </span>
           <Button
             variant="ghost"
@@ -702,6 +719,7 @@ export function AdvancedDataTable<TData>({
             disabled={!table.getCanNextPage()}
           >
             {t("next" as any) ?? "Next"}
+
           </Button>
         </div>
       </div>

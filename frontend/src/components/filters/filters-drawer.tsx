@@ -12,6 +12,7 @@ export type FilterDefinition = {
   label: string;
   options: FilterOption[];
   getValue?: (row: unknown) => string | string[] | null | undefined;
+
 };
 
 type FiltersDrawerProps = {

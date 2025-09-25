@@ -87,6 +87,7 @@ export type TenderAlerts = {
   guaranteeAlert?: string | null;
 };
 
+
 export type ProjectStatus = "planning" | "executing" | "delayed" | "closed";
 
 export type InvoiceStatus = "draft" | "submitted" | "paid" | "overdue";

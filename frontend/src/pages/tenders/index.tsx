@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
+
 import {
   exportTendersCsv,
   listTenders,
@@ -21,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/providers/auth-provider";
 import { useLanguage } from "@/providers/language-provider";
+
 import type {
   Attachment,
   SpecificationBook,
@@ -33,6 +35,7 @@ import type {
 const statusOptions: TenderStatus[] = ["preparing", "submitted", "won", "lost", "cancelled"];
 const tenderTypeOptions: TenderType[] = ["RFQ", "ITB", "RFP", "EOI", "Other"];
 const viewStorageKey = "tender-portal-tenders-view";
+
 
 const statusLabels: Record<"en" | "ar", Record<TenderStatus, string>> = {
   en: {
@@ -77,7 +80,6 @@ const statusBadgeVariant: Record<TenderStatus, "info" | "success" | "warning" | 
 };
 
 type TenderFormErrors = Record<string, string>;
-
 type TenderFormValues = {
   reference: string;
   nameEn: string;
@@ -146,6 +148,7 @@ const combineTitle = (values: { en: string; ar: string }) => {
   if (english && arabic) return `${english} | ${arabic}`;
   return english || arabic;
 };
+
 
 const formatDate = (value: string | null | undefined, locale: string) => {
   if (!value) return null;
@@ -577,6 +580,7 @@ export function TendersPage() {
     return buildDefaultVisibility(width);
   }, []);
 
+
   useEffect(() => {
     if (!data || data.length === 0) {
       setSelectedTender(null);
@@ -590,6 +594,7 @@ export function TendersPage() {
       return;
     }
     setSelectedTender(data[0]);
+
   }, [data, selectedTender]);
 
   const saveMutation = useMutation({
@@ -597,12 +602,14 @@ export function TendersPage() {
     onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: ["tenders"] });
       setSelectedTender(updated);
+
     }
   });
 
   const attachmentMutation = useMutation({
     mutationFn: ({ tenderId, files }: { tenderId: string; files: FileList }) =>
       uploadAttachment(tenderId, files, user.name),
+
     onSuccess: (attachments, variables) => {
       queryClient.invalidateQueries({ queryKey: ["tenders"] });
       setSelectedTender((prev) =>
@@ -641,12 +648,14 @@ export function TendersPage() {
       dueDate,
       submissionDate,
       description: values.description,
+
       timeline: [
         {
           id: `activity-${crypto.randomUUID()}`,
           date: new Date().toISOString(),
           actor: user.name,
           description: locale === "ar" ? "تم إنشاء المناقصة" : "Tender created",
+
           category: "status"
         }
       ],
@@ -668,6 +677,7 @@ export function TendersPage() {
     });
     form.reset();
     setCreateErrors({});
+
   }, [locale, saveMutation, user.name]);
 
   const handleEditTender = useCallback(
@@ -684,6 +694,7 @@ export function TendersPage() {
         : tender.submissionDate;
       const nextTimeline: TenderActivity[] =
         values.status !== tender.status
+
           ? [
               ...tender.timeline,
               {
@@ -694,6 +705,7 @@ export function TendersPage() {
                   locale === "ar"
                     ? `تم تحديث الحالة إلى ${statusLabels[locale][values.status]}`
                     : `Status updated to ${statusLabels[locale][values.status]}`,
+
                 category: "status"
               }
             ]
@@ -718,11 +730,13 @@ export function TendersPage() {
           technicalUrl: values.technicalUrl,
           financialUrl: values.financialUrl
         },
+
         timeline: nextTimeline
       });
     },
     [locale, saveMutation, user.name]
   );
+
 
   const handleAddSpecificationBook = (formId: string) => {
     if (!selectedTender) return;
@@ -765,6 +779,7 @@ export function TendersPage() {
         actor: user.name,
         description:
           locale === "ar" ? `تم إضافة كراسة ${number}` : `Specification booklet ${number} added`,
+
         category: "update"
       }
     ];
@@ -785,6 +800,7 @@ export function TendersPage() {
     const form = document.getElementById(formId) as HTMLFormElement | null;
     if (!form) return;
     const values = readFormValues(form, selectedTender);
+
     const nextTimeline: TenderActivity[] = [
       ...selectedTender.timeline,
       {
@@ -792,6 +808,7 @@ export function TendersPage() {
         date: new Date().toISOString(),
         actor: user.name,
         description: locale === "ar" ? "تم تحديث بيانات العروض" : "Proposal details updated",
+
         category: "update"
       }
     ];
@@ -805,6 +822,7 @@ export function TendersPage() {
         ...selectedTender.proposals,
         technicalUrl: values.technicalUrl,
         financialUrl: values.financialUrl,
+
         submittedBy: user.name,
         submittedAt: new Date().toISOString()
       },
@@ -830,6 +848,7 @@ export function TendersPage() {
 
   const filterDefinitions = useMemo(() => {
     return [
+
       {
         id: "status",
         label: t("status"),
@@ -907,6 +926,7 @@ export function TendersPage() {
       financialUrl: locale === "ar" ? "العرض المالي" : "Financial offer",
       actions: t("actions")
     }),
+
     [locale, t]
   );
 
@@ -919,6 +939,7 @@ export function TendersPage() {
         enableHiding: false,
         cell: ({ row }) => (
           <div className="space-y-1" title={row.original.reference}>
+
             <span className="font-medium text-slate-900">{row.original.reference}</span>
             <p className="text-xs text-slate-500">
               {formatDate(row.original.createdAt, locale) ?? t("notAvailable")}
@@ -967,6 +988,7 @@ export function TendersPage() {
         accessorKey: "dueDate",
         id: "dueDate",
         header: columnLabels.dueDate,
+
         cell: ({ row }) => (
           <div className="space-y-1">
             <span className="text-sm font-medium text-slate-900">
@@ -992,6 +1014,7 @@ export function TendersPage() {
         accessorKey: "amount",
         id: "amount",
         header: columnLabels.amount,
+
         cell: ({ row }) => (
           <span className="font-medium text-slate-900">
             {formatCurrency(row.original.amount, row.original.currency, locale)}
@@ -1019,6 +1042,7 @@ export function TendersPage() {
         accessorKey: "tags",
         id: "tags",
         header: columnLabels.tags,
+
         cell: ({ row }) => (
           <div className="flex flex-wrap gap-2">
             {row.original.tags.length === 0 ? (
@@ -1048,6 +1072,7 @@ export function TendersPage() {
       {
         id: "siteVisit",
         header: columnLabels.siteVisit,
+
         cell: ({ row }) => {
           const visit = row.original.siteVisit;
           if (!visit) {
@@ -1055,6 +1080,7 @@ export function TendersPage() {
           }
           return (
             <div className="space-y-1" title={visit.notes ?? undefined}>
+
               <Badge variant={visit.completed ? "success" : "warning"}>
                 {formatDate(visit.date ?? undefined, locale) ?? t("notAvailable")}
               </Badge>
@@ -1132,6 +1158,7 @@ export function TendersPage() {
                   setSelectedTender(tender);
                   setDrawerOpen(true);
                 }}
+
               >
                 {t("view")}
               </Button>
@@ -1597,6 +1624,7 @@ export function TendersPage() {
                   </div>
                 </div>
               </section>
+
             </form>
           </ModalForm>
         ) : null}
@@ -1640,6 +1668,7 @@ export function TendersPage() {
         </Card>
       </div>
 
+
       <AdvancedDataTable
         data={tableData}
         columns={columns}
@@ -1682,6 +1711,7 @@ export function TendersPage() {
         canManage={can(["admin", "procurement"])}
         userName={user.name}
       />
+
     </div>
   );
 }
