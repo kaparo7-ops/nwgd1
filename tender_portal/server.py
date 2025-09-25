@@ -17,7 +17,9 @@ from urllib.parse import parse_qs
 
 from . import auth, database, models
 
-STATIC_DIR = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+_FRONTEND_ROOT = Path(__file__).resolve().parent.parent / "frontend"
+_DIST_DIR = _FRONTEND_ROOT / "dist"
+STATIC_DIR = _DIST_DIR if _DIST_DIR.exists() else _FRONTEND_ROOT
 EXPORT_DIR = Path(__file__).resolve().parent / "exports"
 EXPORT_DIR.mkdir(parents=True, exist_ok=True)
 
