@@ -24,6 +24,17 @@ class TenderPortalTestCase(unittest.TestCase):
         self.assertIsNotNone(new_user)
         self.assertEqual(new_user['role'], 'finance')
 
+    def test_sample_data_bootstrap(self):
+        models.ensure_sample_data()
+        suppliers = models.list_suppliers()
+        self.assertGreater(len(suppliers), 0)
+        tenders = models.list_tenders()
+        self.assertGreater(len(tenders), 0)
+        projects = models.list_projects()
+        self.assertGreater(len(projects), 0)
+        summary = models.tender_summary()
+        self.assertIn('total_estimated', summary)
+
     def test_tender_project_flow(self):
         procurement = auth.authenticate('procurement', 'Procure123!')
         self.assertIsNotNone(procurement)

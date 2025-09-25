@@ -233,6 +233,18 @@ table td {
   gap: 1rem;
 }
 
+.metrics-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.dashboard-breakdown {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.dashboard-lists {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
 .metric {
   background: white;
   padding: 1rem;
@@ -252,11 +264,146 @@ table td {
   color: var(--primary);
 }
 
+.metric p {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
 .badge {
   padding: 0.25rem 0.5rem;
   border-radius: 999px;
   font-size: 0.75rem;
   background: var(--secondary);
+}
+
+.empty-state {
+  text-align: center;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  border: 1px dashed var(--border);
+  background: white;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.list .empty-state {
+  display: block;
+}
+
+.breakdown-list .breakdown-item {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.breakdown-label {
+  text-transform: capitalize;
+  color: #334155;
+}
+
+.breakdown-value {
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.action-buttons button {
+  flex: 1 1 200px;
+}
+
+table.compact th,
+table.compact td {
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+#latest-tenders-table tbody tr,
+#project-alerts-table tbody tr {
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+#latest-tenders-table tbody tr:hover,
+#project-alerts-table tbody tr:hover {
+  background: rgba(0, 107, 127, 0.08);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(0, 107, 127, 0.12);
+  color: var(--primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.timeline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.timeline-item {
+  cursor: pointer;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.timeline-item:hover {
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+
+.timeline-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.timeline-date {
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.muted {
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.read-only-card {
+  border-style: dashed;
+  background: #f8fafc;
+}
+
+.read-only input,
+.read-only select,
+.read-only textarea {
+  background: #f1f5f9;
+}
+
+.read-only button {
+  opacity: 0.7;
+}
+
+.read-only-banner {
+  margin: 0 0 0.75rem;
+  padding: 0.75rem;
+  border-radius: 0.75rem;
+  background: rgba(0, 107, 127, 0.12);
+  color: #0f172a;
+  font-size: 0.85rem;
 }
 
 .badge.warning {

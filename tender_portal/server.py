@@ -454,6 +454,8 @@ def get_summary(handler: TenderPortalRequestHandler, params: Dict[str, str]) -> 
         "projects": models.project_summary(),
         "finance": models.financial_pipeline(),
         "calendar": models.calendar_items(),
+        "recent_tenders": models.latest_tenders(),
+        "at_risk_projects": models.projects_at_risk(),
     }
     handler.write_json(HTTPStatus.OK, payload)
 
@@ -499,6 +501,7 @@ def export_tenders(handler: TenderPortalRequestHandler, params: Dict[str, str]) 
 def run_server(host: str = "0.0.0.0", port: int = 8000) -> None:
     database.init_db()
     auth.ensure_default_users()
+    models.ensure_sample_data()
     server = ThreadingHTTPServer((host, port), TenderPortalRequestHandler)
     print(f"Tender portal server running on http://{host}:{port}")
     try:

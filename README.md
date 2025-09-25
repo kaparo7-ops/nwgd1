@@ -12,6 +12,7 @@ This repository contains a lightweight web application for managing tenders, bid
 - **Dashboards & reports** – consolidated metrics, upcoming calendar milestones, and financial pipeline snapshots.
 - **Notifications** – automatic alerts for closing tenders, overdue invoices, and expiring guarantees.
 - **Bilingual UI** – toggle Arabic/English labels instantly from the client.
+- **Sample dataset** – first run seeds realistic tenders, projects, suppliers, invoices, and alerts so the dashboards are immediately informative.
 
 ## Preparing a fresh Ubuntu 22.04 host
 
@@ -76,8 +77,9 @@ space ready for future packages.
    - `tender_portal/uploads/` – storage for tender attachments. Back up this folder with the database to retain historical recor
      ds.
 
-8. **(Optional) Create convenience scripts**. For example, you can add a helper to `~/bin/start-tender-portal.sh` so the server 
-   starts with a single command:
+8. **(Optional) Create convenience scripts**. For example, you can add a helper to `~/bin/start-tender-portal.sh` so the server
+   starts with a single command. Because `.venv/` is ignored by Git (see `.gitignore`), you can safely create the virtual
+   environment directly inside the project directory without polluting commits:
 
    ```bash
    mkdir -p ~/bin
@@ -91,6 +93,35 @@ space ready for future packages.
    ```
 
    Ensure `~/bin` is on your `PATH` (`echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc`).
+
+9. **Keep the server running after logout (optional)**. If you want the URL (e.g., `http://10.2.1.91:8000`) to stay up even when
+   you close your SSH session, create a `systemd` service:
+
+   ```bash
+   sudo tee /etc/systemd/system/tender-portal.service > /dev/null <<EOF
+   [Unit]
+   Description=Tender & Project Management Portal
+   After=network.target
+
+   [Service]
+   Type=simple
+   User=$(whoami)
+   WorkingDirectory=/opt/tender-portal
+   Environment="TENDER_PORTAL_DB=/opt/tender-portal/tender_portal/data/portal.db"
+   ExecStart=/opt/tender-portal/.venv/bin/python -m tender_portal.server
+   Restart=on-failure
+
+   [Install]
+   WantedBy=multi-user.target
+   EOF
+
+   sudo systemctl daemon-reload
+   sudo systemctl enable tender-portal.service
+   sudo systemctl start tender-portal.service
+   ```
+
+   Adjust `User=` if the service should run under a dedicated account. The portal will now auto-start on boot and can be
+   managed with `sudo systemctl status|stop|restart tender-portal.service`.
 
 ## Getting started
 
@@ -116,6 +147,18 @@ space ready for future packages.
    | Viewer (read only)  | `viewer`      | `Viewer123!`   |
 
    Each role exposes the relevant parts of the system (tenders, finance, reports, etc.).
+
+## Demo dataset
+
+The first time the API starts with an empty SQLite database it automatically loads a small but realistic dataset:
+
+- Key suppliers for construction, logistics, and renewable energy work.
+- Four tenders across RFQ/ITB/RFP types with mixed statuses and upcoming deadlines.
+- Two linked projects with financial data, guarantees, and assigned suppliers.
+- Invoices that drive the finance pipeline and trigger overdue alerts.
+- Notifications for tenders closing soon, guarantees about to expire, and unpaid invoices.
+
+This seeded content ensures the new dashboard and reports render meaningful charts immediately after deployment. To start from a clean slate, delete `tender_portal/data/portal.db` (and any uploaded files) before restarting the server.
 
 ## Project structure
 

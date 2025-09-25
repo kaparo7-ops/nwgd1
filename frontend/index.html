@@ -50,9 +50,59 @@
         <section class="content">
           <div id="dashboard" class="panel">
             <h2 data-i18n="dashboard_title">Portfolio overview</h2>
-            <div class="grid" id="dashboard-metrics"></div>
+            <div class="grid metrics-grid" id="dashboard-metrics"></div>
+
+            <div class="grid dashboard-breakdown">
+              <div class="card">
+                <h3 data-i18n="tender_breakdown">Tender pipeline</h3>
+                <ul id="tender-breakdown" class="list breakdown-list"></ul>
+              </div>
+              <div class="card">
+                <h3 data-i18n="project_health">Project health</h3>
+                <ul id="project-breakdown" class="list breakdown-list"></ul>
+              </div>
+              <div class="card">
+                <h3 data-i18n="quick_actions">Quick actions</h3>
+                <div id="quick-actions" class="action-buttons"></div>
+              </div>
+            </div>
+
+            <div class="grid dashboard-lists">
+              <div class="card">
+                <h3 data-i18n="recent_tenders">Recent tenders</h3>
+                <table class="compact" id="latest-tenders-table">
+                  <thead>
+                    <tr>
+                      <th data-i18n="reference_code">Reference</th>
+                      <th data-i18n="title">Title</th>
+                      <th data-i18n="owner">Owner</th>
+                      <th data-i18n="status">Status</th>
+                      <th data-i18n="due">Due</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+                <p class="empty-state hidden" id="latest-tenders-empty" data-i18n="no_data">No data</p>
+              </div>
+              <div class="card">
+                <h3 data-i18n="projects_at_risk">Projects needing attention</h3>
+                <table class="compact" id="project-alerts-table">
+                  <thead>
+                    <tr>
+                      <th data-i18n="project">Project</th>
+                      <th data-i18n="tender">Tender</th>
+                      <th data-i18n="due">Due</th>
+                      <th data-i18n="status">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+                <p class="empty-state hidden" id="project-alerts-empty" data-i18n="no_data">No data</p>
+              </div>
+            </div>
+
             <h3 data-i18n="calendar_title">Upcoming deadlines</h3>
-            <ul id="calendar-list" class="list"></ul>
+            <ul id="calendar-list" class="list timeline-list"></ul>
           </div>
 
           <div id="tenders" class="panel hidden">
