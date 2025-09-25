@@ -17,7 +17,9 @@ from urllib.parse import parse_qs
 
 from . import auth, database, models
 
-STATIC_DIR = Path(__file__).resolve().parent.parent / "frontend"
+_FRONTEND_ROOT = Path(__file__).resolve().parent.parent / "frontend"
+_DIST_DIR = _FRONTEND_ROOT / "dist"
+STATIC_DIR = _DIST_DIR if _DIST_DIR.exists() else _FRONTEND_ROOT
 EXPORT_DIR = Path(__file__).resolve().parent / "exports"
 EXPORT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -122,8 +124,11 @@ class TenderPortalRequestHandler(BaseHTTPRequestHandler):
         safe_path = posixpath.normpath(path.lstrip("/"))
         file_path = STATIC_DIR / safe_path
         if not file_path.exists() or not file_path.is_file():
-            self.send_error(HTTPStatus.NOT_FOUND)
-            return
+            # Serve the SPA entry point for unknown routes.
+            file_path = STATIC_DIR / "index.html"
+            if not file_path.exists():
+                self.send_error(HTTPStatus.NOT_FOUND)
+                return
         content_type = "text/plain"
         if file_path.suffix == ".html":
             content_type = "text/html; charset=utf-8"
