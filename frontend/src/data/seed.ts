@@ -11,7 +11,6 @@ import type {
   Tender,
   TenderActivity,
   TenderPricingLine,
-
   User
 } from "@/utils/types";
 
@@ -101,7 +100,6 @@ export const tenders: Tender[] = [
     reference: "UNDP-LBY-2024-017",
     title: "Rehabilitation of Primary Health Clinics",
     tenderType: "ITB",
-
     agency: "UNDP",
     amount: 480000,
     currency: "USD",
@@ -309,6 +307,7 @@ export const tenders: Tender[] = [
       siteVisitOverdue: false,
       guaranteeAlert: null
     },
+    description: "Multi-lot procurement of hygiene kits and water trucking."
 
   },
   {

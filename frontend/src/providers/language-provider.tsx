@@ -33,6 +33,12 @@ export type DictionaryKey =
   | "save"
   | "cancel"
   | "name"
+  | "reference"
+  | "agency"
+  | "quantity"
+  | "unitCost"
+  | "description"
+
   | "status"
   | "owner"
   | "dueDate"
@@ -79,7 +85,6 @@ export type DictionaryKey =
   | "notAvailable"
   | "links"
   | "tagsPlaceholder"
-
   | "languageSwitch"
   | "commandPalettePlaceholder"
   | "presetSaved"
@@ -131,6 +136,8 @@ const dictionaries: Record<Locale, Dictionary> = {
     amount: "Amount",
     tenderType: "Tender type",
     statusReason: "Status reason",
+    notes: "Notes",
+
     offerValue: "Offer",
     tags: "Tags",
     siteVisit: "Site visit",
@@ -155,6 +162,8 @@ const dictionaries: Record<Locale, Dictionary> = {
     actions: "Actions",
     view: "View",
     edit: "Edit",
+    open: "Open",
+
     files: "Files",
     pricing: "Pricing",
     pricingBasis: "Shipping basis",
@@ -165,13 +174,14 @@ const dictionaries: Record<Locale, Dictionary> = {
     supplierComparisons: "Supplier comparisons",
     reminders: "Reminders",
     submissionReminder: "Submission",
+    submissionDate: "Submission date",
+
     specPurchaseReminder: "Specification purchase",
     siteVisitReminder: "Site visit",
     guaranteeReminder: "Guarantee",
     notAvailable: "Not available",
     links: "Links",
     tagsPlaceholder: "e.g. construction, UNDP",
-
     languageSwitch: "العربية",
     commandPalettePlaceholder: "Search navigation, tenders, suppliers...",
     presetSaved: "Filter preset saved",
@@ -213,6 +223,7 @@ const dictionaries: Record<Locale, Dictionary> = {
     amount: "المبلغ",
     tenderType: "نوع المناقصة",
     statusReason: "سبب الحالة",
+    notes: "ملاحظات",
     offerValue: "قيمة العرض",
     tags: "الوسوم",
     siteVisit: "الزيارة الميدانية",
@@ -237,6 +248,7 @@ const dictionaries: Record<Locale, Dictionary> = {
     actions: "إجراءات",
     view: "عرض",
     edit: "تعديل",
+    open: "فتح",
     files: "مرفقات",
     pricing: "التسعير",
     pricingBasis: "أساس الشحن",
@@ -247,13 +259,13 @@ const dictionaries: Record<Locale, Dictionary> = {
     supplierComparisons: "مقارنات الموردين",
     reminders: "التنبيهات",
     submissionReminder: "تسليم العرض",
+    submissionDate: "تاريخ التقديم",
     specPurchaseReminder: "شراء الكراسة",
     siteVisitReminder: "الزيارة الميدانية",
     guaranteeReminder: "الضمان",
     notAvailable: "غير متوفر",
     links: "الروابط",
     tagsPlaceholder: "مثال: إنشاءات، الأمم المتحدة",
-
     languageSwitch: "English",
     commandPalettePlaceholder: "ابحث في الصفحات والمناقصات...",
     presetSaved: "تم حفظ المرشح",

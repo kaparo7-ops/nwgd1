@@ -5,10 +5,14 @@ import { Checkbox } from "@/components/filters/inputs";
 import { useToast } from "@/components/ui/toast";
 import { useLanguage } from "@/providers/language-provider";
 
+export type FilterOption = { value: string; label: string };
+
 export type FilterDefinition = {
   id: string;
   label: string;
-  options: Array<{ value: string; label: string }>;
+  options: FilterOption[];
+  getValue?: (row: unknown) => string | string[] | null | undefined;
+
 };
 
 type FiltersDrawerProps = {

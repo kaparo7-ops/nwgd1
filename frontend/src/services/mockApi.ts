@@ -22,7 +22,6 @@ import type {
   Tender,
   TenderActivity,
   TenderPricing,
-
   User
 } from "@/utils/types";
 
@@ -288,7 +287,6 @@ export async function appendTenderActivity(
   return database.tenders[tenderIndex];
 }
 
-
 export async function listProjects(): Promise<Project[]> {
   await latency();
   return database.projects;
@@ -314,48 +312,99 @@ export async function listUsers(): Promise<User[]> {
   return database.users;
 }
 
-export async function exportTendersCsv(): Promise<string> {
+const tenderExportColumns: Record<
+  string,
+  { label: string; getValue: (tender: Tender, locale?: string) => string }
+> = {
+  reference: { label: "Reference", getValue: (tender) => tender.reference },
+  title: { label: "Title", getValue: (tender) => tender.title },
+  tenderType: { label: "Type", getValue: (tender) => tender.tenderType },
+  agency: { label: "Agency", getValue: (tender) => tender.agency },
+  owner: { label: "Assignee", getValue: (tender) => tender.owner },
+  status: { label: "Status", getValue: (tender) => tender.status },
+  statusReason: {
+    label: "Status reason",
+    getValue: (tender) => tender.statusReason ?? ""
+  },
+  dueDate: {
+    label: "Due date",
+    getValue: (tender, locale) => formatDate(tender.dueDate, locale)
+  },
+  submissionDate: {
+    label: "Submission date",
+    getValue: (tender, locale) => formatDate(tender.submissionDate, locale)
+  },
+  amount: {
+    label: "Offer amount",
+    getValue: (tender, locale) => formatCurrency(tender.amount, tender.currency, locale)
+  },
+  tags: {
+    label: "Tags",
+    getValue: (tender) => tender.tags.join(" | ")
+  },
+  specification: {
+    label: "Specification purchased",
+    getValue: (tender) =>
+      tender.specificationBooks.some((book) => book.purchaseDate) ? "Yes" : "No"
+  },
+  siteVisit: {
+    label: "Site visit",
+    getValue: (tender, locale) => formatDate(tender.siteVisit?.date, locale)
+  },
+  technicalUrl: {
+    label: "Technical link",
+    getValue: (tender) => tender.proposals.technicalUrl ?? ""
+  },
+  financialUrl: {
+    label: "Financial link",
+    getValue: (tender) => tender.proposals.financialUrl ?? ""
+  }
+};
+
+const formatDate = (value: string | null | undefined, locale?: string) => {
+  if (!value) return "";
+  try {
+    return new Intl.DateTimeFormat(locale ?? "en", { dateStyle: "medium" }).format(
+      new Date(value)
+    );
+  } catch (error) {
+    return new Date(value).toLocaleDateString();
+  }
+};
+
+const formatCurrency = (value: number, currency: string, locale?: string) => {
+  try {
+    return new Intl.NumberFormat(locale ?? "en", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 0
+    }).format(value);
+  } catch (error) {
+    return `${currency} ${value.toLocaleString()}`;
+  }
+};
+
+export async function exportTendersCsv(options?: {
+  rows?: Tender[];
+  visibleColumns?: string[];
+  locale?: string;
+}): Promise<string> {
   await latency(100, 200);
-  const header = [
-    "Reference",
-    "Title",
-    "Type",
-    "Agency",
-    "Assignee",
-    "Status",
-    "Status reason",
-    "Offer amount",
-    "Currency",
-    "Submission",
-    "Due",
-    "Tags",
-    "Specification purchased",
-    "Site visit",
-    "Technical link",
-    "Financial link"
+  const dataset = options?.rows ?? database.tenders;
+  const locale = options?.locale ?? "en";
+  const columnIds = (options?.visibleColumns?.length
+    ? options.visibleColumns
+    : Object.keys(tenderExportColumns)
+  ).filter((columnId) => tenderExportColumns[columnId]);
 
-  ];
-  const rows = database.tenders.map((tender) => [
-    tender.reference,
-    tender.title,
-    tender.tenderType,
-    tender.agency,
-    tender.owner,
-    tender.status,
-    tender.statusReason ?? "",
-    tender.amount.toString(),
-    tender.currency,
-    tender.submissionDate,
-    tender.dueDate,
-    tender.tags.join(" | "),
-    tender.specificationBooks.some((book) => book.purchaseDate) ? "Yes" : "No",
-    tender.siteVisit?.date ?? "",
-    tender.proposals.technicalUrl ?? "",
-    tender.proposals.financialUrl ?? ""
+  const header = columnIds.map((columnId) => tenderExportColumns[columnId].label);
+  const rows = dataset.map((tender) =>
+    columnIds.map((columnId) => tenderExportColumns[columnId].getValue(tender, locale))
+  );
 
-  ]);
   return [header, ...rows]
-    .map((row) => row.map((cell) => `"${cell}"`).join(","))
+    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+
     .join("\n");
 }
 
