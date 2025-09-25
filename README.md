@@ -14,6 +14,9 @@ This repository contains a lightweight web application for managing tenders, bid
 - **Bilingual UI** – toggle Arabic/English labels instantly from the client. Every component flips direction (LTR/RTL) and typography using shared theme tokens.
 - **Sample dataset** – first run seeds realistic tenders, projects, suppliers, invoices, and alerts so the dashboards are immediately informative.
 - **Modern SPA** – React + Vite + Tailwind CSS with shadcn/ui primitives, lucide-react icons, Recharts visualisations, and React Query caching.
+- **Bilingual UI** – toggle Arabic/English labels instantly from the client.
+- **Sample dataset** – first run seeds realistic tenders, projects, suppliers, invoices, and alerts so the dashboards are immediately informative.
+
 
 ## Preparing a fresh Ubuntu 22.04 host
 
@@ -124,6 +127,7 @@ space ready for future packages.
    Adjust `User=` if the service should run under a dedicated account. The portal will now auto-start on boot and can be
    managed with `sudo systemctl status|stop|restart tender-portal.service`.
 
+
 ## Frontend (React + Vite)
 
 The SPA lives under `frontend/` and uses React 18, Vite, Tailwind CSS, shadcn/ui primitives, lucide-react icons, Recharts, and React Query. Install Node.js 18+ and then run:
@@ -171,9 +175,12 @@ frontend/
    python -m tender_portal.server
    ```
 
-   The server listens on `http://0.0.0.0:8000` by default. During development run the Vite dev server in another terminal (`npm run dev` inside `frontend/`) and browse to `http://localhost:5173/`. For production copy `frontend/dist` into your web tier or configure the Python server to serve the built assets.
+
 
 3. **Open the web client** by visiting the Vite URL above (or the deployed static host) in your browser.
+
+   The server listens on `http://0.0.0.0:8000` by default. Static assets are served from `frontend/`.
+
 
 4. **Sign in** with one of the demo users:
 
@@ -218,6 +225,7 @@ frontend/
     ├── theme/                # Global colour/spacing/typography tokens
     └── __tests__/            # Vitest smoke tests for dashboard + data table
 
+
 tender_portal/
 ├── __init__.py
 ├── auth.py          # User accounts, hashing, and sessions
@@ -234,6 +242,7 @@ tests/
 
 - **Backend** – `python -m unittest`
 - **Frontend** – `cd frontend && npm run test`
+
 
 ## Data storage
 
