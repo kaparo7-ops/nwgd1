@@ -17,8 +17,12 @@ import type {
   Notification,
   PipelineBreakdown,
   Project,
+  SpecificationBook,
   Supplier,
   Tender,
+  TenderActivity,
+  TenderPricing,
+
   User
 } from "@/utils/types";
 
@@ -96,34 +100,115 @@ export async function getTender(id: string): Promise<Tender | undefined> {
   return database.tenders.find((tender) => tender.id === id);
 }
 
-export async function saveTender(tender: Partial<Tender> & { title: string }): Promise<Tender> {
+const defaultPricing = (currency: string): TenderPricing => ({
+  basis: "flat",
+  lines: [],
+  summary: {
+    baseCost: 0,
+    marginValue: 0,
+    shippingCost: 0,
+    finalPrice: 0,
+    currency
+  }
+});
+
+export async function saveTender(
+  tender: Partial<Tender> & { title?: string }
+): Promise<Tender> {
   await latency();
   const id = tender.id ?? generateId("tender");
   const existingIndex = database.tenders.findIndex((item) => item.id === id);
-  const record: Tender = {
+  const existing = existingIndex >= 0 ? database.tenders[existingIndex] : undefined;
+
+  if (!existing && !tender.title) {
+    throw new Error("Title is required for new tenders");
+  }
+
+  const baseCurrency = tender.currency ?? existing?.currency ?? "USD";
+
+  const defaults: Tender = {
     id,
-    reference: tender.reference ?? `TMP-${id.slice(-5)}`,
-    title: tender.title,
-    agency: tender.agency ?? "UN Agency",
-    amount: tender.amount ?? 0,
-    currency: tender.currency ?? "USD",
-    owner: tender.owner ?? "Procurement",
-    status: tender.status ?? "draft",
-    submissionDate: tender.submissionDate ?? new Date().toISOString(),
-    dueDate: tender.dueDate ?? new Date().toISOString(),
-    createdAt: tender.createdAt ?? new Date().toISOString(),
-    attachments: tender.attachments ?? [],
-    description: tender.description ?? ""
+    reference: existing?.reference ?? tender.reference ?? `TMP-${id.slice(-5)}`,
+    title: existing?.title ?? tender.title ?? "Untitled tender",
+    tenderType: existing?.tenderType ?? tender.tenderType ?? "RFP",
+    agency: existing?.agency ?? tender.agency ?? "UN Agency",
+    amount: existing?.amount ?? tender.amount ?? 0,
+    currency: existing?.currency ?? tender.currency ?? "USD",
+    owner: existing?.owner ?? tender.owner ?? "Procurement",
+    status: existing?.status ?? tender.status ?? "preparing",
+    statusReason: existing?.statusReason ?? tender.statusReason,
+    tags: existing?.tags ?? tender.tags ?? [],
+    submissionDate:
+      existing?.submissionDate ?? tender.submissionDate ?? new Date().toISOString(),
+    dueDate: existing?.dueDate ?? tender.dueDate ?? new Date().toISOString(),
+    createdAt: existing?.createdAt ?? tender.createdAt ?? new Date().toISOString(),
+    siteVisit: existing?.siteVisit ?? tender.siteVisit,
+    specificationBooks: existing?.specificationBooks ?? tender.specificationBooks ?? [],
+    proposals: existing?.proposals ?? tender.proposals ?? {},
+    attachments: existing?.attachments ?? tender.attachments ?? [],
+    links: existing?.links ?? tender.links ?? [],
+    timeline: existing?.timeline ?? tender.timeline ?? [],
+    pricing: existing?.pricing ?? tender.pricing ?? defaultPricing(baseCurrency),
+    supplierComparisons:
+      existing?.supplierComparisons ?? tender.supplierComparisons ?? [],
+    alerts: existing?.alerts ?? tender.alerts ?? {
+      submissionReminderAt: null,
+      needsSpecificationPurchase: true,
+      siteVisitOverdue: false,
+      guaranteeAlert: null
+    },
+    description: existing?.description ?? tender.description ?? ""
+  };
+
+  const updated: Tender = {
+    ...defaults,
+    ...tender,
+    reference: tender.reference ?? defaults.reference,
+    title: tender.title ?? defaults.title,
+    tenderType: tender.tenderType ?? defaults.tenderType,
+    agency: tender.agency ?? defaults.agency,
+    amount: tender.amount ?? defaults.amount,
+    currency: tender.currency ?? defaults.currency,
+    owner: tender.owner ?? defaults.owner,
+    status: tender.status ?? defaults.status,
+    statusReason:
+      tender.status === "lost" || tender.status === "cancelled"
+        ? tender.statusReason ?? defaults.statusReason ?? ""
+        : tender.statusReason ?? defaults.statusReason,
+    tags: tender.tags ?? defaults.tags,
+    submissionDate: tender.submissionDate ?? defaults.submissionDate,
+    dueDate: tender.dueDate ?? defaults.dueDate,
+    createdAt: tender.createdAt ?? defaults.createdAt,
+    siteVisit: tender.siteVisit ?? defaults.siteVisit,
+    specificationBooks: tender.specificationBooks ?? defaults.specificationBooks,
+    proposals: { ...defaults.proposals, ...tender.proposals },
+    attachments: tender.attachments ?? defaults.attachments,
+    links: tender.links ?? defaults.links,
+    timeline: tender.timeline ?? defaults.timeline,
+    pricing: {
+      ...defaults.pricing,
+      ...tender.pricing,
+      lines: tender.pricing?.lines ?? defaults.pricing.lines,
+      summary: {
+        ...defaults.pricing.summary,
+        ...tender.pricing?.summary,
+        currency: tender.pricing?.summary?.currency ?? defaults.pricing.summary.currency
+      }
+    },
+    supplierComparisons: tender.supplierComparisons ?? defaults.supplierComparisons,
+    alerts: { ...defaults.alerts, ...tender.alerts },
+    description: tender.description ?? defaults.description
   };
 
   if (existingIndex >= 0) {
-    database.tenders[existingIndex] = { ...database.tenders[existingIndex], ...record };
+    database.tenders[existingIndex] = updated;
   } else {
-    database.tenders.unshift(record);
+    database.tenders.unshift(updated);
   }
 
   persist(database);
-  return record;
+  return updated;
+
 }
 
 export async function uploadAttachment(
@@ -153,6 +238,56 @@ export async function uploadAttachment(
   persist(database);
   return tender.attachments;
 }
+
+export async function updateSpecificationBook(
+  tenderId: string,
+  book: SpecificationBook
+): Promise<Tender> {
+  await latency();
+  const tenderIndex = database.tenders.findIndex((item) => item.id === tenderId);
+  if (tenderIndex === -1) {
+    throw new Error("Tender not found");
+  }
+
+  const tender = database.tenders[tenderIndex];
+  const nextBooks = tender.specificationBooks.map((existing) =>
+    existing.id === book.id ? book : existing
+  );
+
+  database.tenders[tenderIndex] = {
+    ...tender,
+    specificationBooks: nextBooks,
+    alerts: {
+      ...tender.alerts,
+      needsSpecificationPurchase: nextBooks.every(
+        (entry) => !entry.purchaseDate || entry.purchaseDate === ""
+      )
+    }
+  };
+
+  persist(database);
+  return database.tenders[tenderIndex];
+}
+
+export async function appendTenderActivity(
+  tenderId: string,
+  activity: TenderActivity
+): Promise<Tender> {
+  await latency();
+  const tenderIndex = database.tenders.findIndex((item) => item.id === tenderId);
+  if (tenderIndex === -1) {
+    throw new Error("Tender not found");
+  }
+
+  database.tenders[tenderIndex] = {
+    ...database.tenders[tenderIndex],
+    timeline: [...database.tenders[tenderIndex].timeline, activity]
+  };
+
+  persist(database);
+  return database.tenders[tenderIndex];
+}
+
 
 export async function listProjects(): Promise<Project[]> {
   await latency();
@@ -184,24 +319,40 @@ export async function exportTendersCsv(): Promise<string> {
   const header = [
     "Reference",
     "Title",
+    "Type",
     "Agency",
-    "Owner",
+    "Assignee",
     "Status",
-    "Amount",
+    "Status reason",
+    "Offer amount",
     "Currency",
     "Submission",
-    "Due"
+    "Due",
+    "Tags",
+    "Specification purchased",
+    "Site visit",
+    "Technical link",
+    "Financial link"
+
   ];
   const rows = database.tenders.map((tender) => [
     tender.reference,
     tender.title,
+    tender.tenderType,
     tender.agency,
     tender.owner,
     tender.status,
+    tender.statusReason ?? "",
     tender.amount.toString(),
     tender.currency,
     tender.submissionDate,
-    tender.dueDate
+    tender.dueDate,
+    tender.tags.join(" | "),
+    tender.specificationBooks.some((book) => book.purchaseDate) ? "Yes" : "No",
+    tender.siteVisit?.date ?? "",
+    tender.proposals.technicalUrl ?? "",
+    tender.proposals.financialUrl ?? ""
+
   ]);
   return [header, ...rows]
     .map((row) => row.map((cell) => `"${cell}"`).join(","))

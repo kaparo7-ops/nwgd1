@@ -37,6 +37,49 @@ export type DictionaryKey =
   | "owner"
   | "dueDate"
   | "amount"
+  | "tenderType"
+  | "statusReason"
+  | "offerValue"
+  | "tags"
+  | "siteVisit"
+  | "siteVisitAssignee"
+  | "siteVisitNotes"
+  | "siteVisitPending"
+  | "specificationBooks"
+  | "specificationBookNumber"
+  | "specificationBookCost"
+  | "specificationBookMethod"
+  | "specificationBookResponsible"
+  | "specificationBookStatusPurchased"
+  | "specificationBookStatusMissing"
+  | "specificationBookReceipt"
+  | "addSpecificationBook"
+  | "proposals"
+  | "technicalProposal"
+  | "financialProposal"
+  | "proposalsBlocked"
+  | "updateProposals"
+  | "timeline"
+  | "actions"
+  | "view"
+  | "edit"
+  | "files"
+  | "pricing"
+  | "pricingBasis"
+  | "pricingBaseCost"
+  | "pricingMargin"
+  | "pricingShipping"
+  | "pricingFinalPrice"
+  | "supplierComparisons"
+  | "reminders"
+  | "submissionReminder"
+  | "specPurchaseReminder"
+  | "siteVisitReminder"
+  | "guaranteeReminder"
+  | "notAvailable"
+  | "links"
+  | "tagsPlaceholder"
+
   | "languageSwitch"
   | "commandPalettePlaceholder"
   | "presetSaved"
@@ -77,10 +120,58 @@ const dictionaries: Record<Locale, Dictionary> = {
     save: "Save",
     cancel: "Cancel",
     name: "Name",
+    reference: "Reference",
+    agency: "Agency",
+    quantity: "Quantity",
+    unitCost: "Unit cost",
+    description: "Description",
     status: "Status",
-    owner: "Owner",
+    owner: "Assignee",
     dueDate: "Due date",
     amount: "Amount",
+    tenderType: "Tender type",
+    statusReason: "Status reason",
+    offerValue: "Offer",
+    tags: "Tags",
+    siteVisit: "Site visit",
+    siteVisitAssignee: "Assigned to",
+    siteVisitNotes: "Visit notes",
+    siteVisitPending: "Visit not scheduled",
+    specificationBooks: "Specification booklets",
+    specificationBookNumber: "Booklet number",
+    specificationBookCost: "Booklet cost",
+    specificationBookMethod: "Purchase method",
+    specificationBookResponsible: "Responsible",
+    specificationBookStatusPurchased: "Purchased",
+    specificationBookStatusMissing: "Not purchased",
+    specificationBookReceipt: "Receipt",
+    addSpecificationBook: "Add booklet",
+    proposals: "Proposals",
+    technicalProposal: "Technical proposal URL",
+    financialProposal: "Financial proposal URL",
+    proposalsBlocked: "Purchase the specification booklet before submitting proposals.",
+    updateProposals: "Save proposals",
+    timeline: "Activity timeline",
+    actions: "Actions",
+    view: "View",
+    edit: "Edit",
+    files: "Files",
+    pricing: "Pricing",
+    pricingBasis: "Shipping basis",
+    pricingBaseCost: "Base cost",
+    pricingMargin: "Margin",
+    pricingShipping: "Shipping",
+    pricingFinalPrice: "Final price",
+    supplierComparisons: "Supplier comparisons",
+    reminders: "Reminders",
+    submissionReminder: "Submission",
+    specPurchaseReminder: "Specification purchase",
+    siteVisitReminder: "Site visit",
+    guaranteeReminder: "Guarantee",
+    notAvailable: "Not available",
+    links: "Links",
+    tagsPlaceholder: "e.g. construction, UNDP",
+
     languageSwitch: "العربية",
     commandPalettePlaceholder: "Search navigation, tenders, suppliers...",
     presetSaved: "Filter preset saved",
@@ -111,10 +202,58 @@ const dictionaries: Record<Locale, Dictionary> = {
     save: "حفظ",
     cancel: "إلغاء",
     name: "الاسم",
+    reference: "الرقم المرجعي",
+    agency: "الجهة المعلنة",
+    quantity: "الكمية",
+    unitCost: "سعر الوحدة",
+    description: "الوصف",
     status: "الحالة",
-    owner: "المسؤول",
+    owner: "المكلّف",
     dueDate: "تاريخ الاستحقاق",
     amount: "المبلغ",
+    tenderType: "نوع المناقصة",
+    statusReason: "سبب الحالة",
+    offerValue: "قيمة العرض",
+    tags: "الوسوم",
+    siteVisit: "الزيارة الميدانية",
+    siteVisitAssignee: "المكلّف بالزيارة",
+    siteVisitNotes: "ملاحظات الزيارة",
+    siteVisitPending: "لم يتم تحديد موعد للزيارة",
+    specificationBooks: "كراسات المواصفات",
+    specificationBookNumber: "رقم الكراسة",
+    specificationBookCost: "تكلفة الكراسة",
+    specificationBookMethod: "طريقة الشراء",
+    specificationBookResponsible: "المسؤول",
+    specificationBookStatusPurchased: "تم الشراء",
+    specificationBookStatusMissing: "غير مشتراة",
+    specificationBookReceipt: "الإيصال",
+    addSpecificationBook: "إضافة كراسة",
+    proposals: "العروض",
+    technicalProposal: "رابط العرض الفني",
+    financialProposal: "رابط العرض المالي",
+    proposalsBlocked: "يجب شراء كراسة المواصفات قبل رفع العروض.",
+    updateProposals: "حفظ بيانات العروض",
+    timeline: "سجل النشاط",
+    actions: "إجراءات",
+    view: "عرض",
+    edit: "تعديل",
+    files: "مرفقات",
+    pricing: "التسعير",
+    pricingBasis: "أساس الشحن",
+    pricingBaseCost: "التكلفة الأساسية",
+    pricingMargin: "الهامش",
+    pricingShipping: "الشحن",
+    pricingFinalPrice: "السعر النهائي",
+    supplierComparisons: "مقارنات الموردين",
+    reminders: "التنبيهات",
+    submissionReminder: "تسليم العرض",
+    specPurchaseReminder: "شراء الكراسة",
+    siteVisitReminder: "الزيارة الميدانية",
+    guaranteeReminder: "الضمان",
+    notAvailable: "غير متوفر",
+    links: "الروابط",
+    tagsPlaceholder: "مثال: إنشاءات، الأمم المتحدة",
+
     languageSwitch: "English",
     commandPalettePlaceholder: "ابحث في الصفحات والمناقصات...",
     presetSaved: "تم حفظ المرشح",

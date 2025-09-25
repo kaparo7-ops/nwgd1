@@ -14,9 +14,6 @@ This repository contains a lightweight web application for managing tenders, bid
 - **Bilingual UI** – toggle Arabic/English labels instantly from the client. Every component flips direction (LTR/RTL) and typography using shared theme tokens.
 - **Sample dataset** – first run seeds realistic tenders, projects, suppliers, invoices, and alerts so the dashboards are immediately informative.
 - **Modern SPA** – React + Vite + Tailwind CSS with shadcn/ui primitives, lucide-react icons, Recharts visualisations, and React Query caching.
-- **Bilingual UI** – toggle Arabic/English labels instantly from the client.
-- **Sample dataset** – first run seeds realistic tenders, projects, suppliers, invoices, and alerts so the dashboards are immediately informative.
-
 
 ## Preparing a fresh Ubuntu 22.04 host
 
@@ -175,11 +172,9 @@ frontend/
    python -m tender_portal.server
    ```
 
-
+   The server listens on `http://0.0.0.0:8000` by default. During development run the Vite dev server in another terminal (`npm run dev` inside `frontend/`) and browse to `http://localhost:5173/`. For production copy `frontend/dist` into your web tier or configure the Python server to serve the built assets.
 
 3. **Open the web client** by visiting the Vite URL above (or the deployed static host) in your browser.
-
-   The server listens on `http://0.0.0.0:8000` by default. Static assets are served from `frontend/`.
 
 
 4. **Sign in** with one of the demo users:
@@ -242,7 +237,6 @@ tests/
 
 - **Backend** – `python -m unittest`
 - **Frontend** – `cd frontend && npm run test`
-
 
 ## Data storage
 
