@@ -52,25 +52,37 @@ export type TenderActivity = {
 export type TenderPricingLine = {
   id: string;
   item: string;
-  unitCost: number;
   quantity: number;
-  margin: number;
-  shipping: number;
-  total: number;
-  currency: string;
+  unitCostUsd: number;
+  unitCostLyd: number;
+  fxRate: number | null;
+  marginPercent: number;
+  marginUsd: number;
+  marginLyd: number;
+  shippingUsd: number;
+  shippingLyd: number;
+  subtotalUsd: number;
+  subtotalLyd: number;
+  totalUsd: number;
+  totalLyd: number;
   supplier?: string;
 };
 
+export type TenderPricingSummary = {
+  subtotalUsd: number;
+  subtotalLyd: number;
+  marginUsd: number;
+  marginLyd: number;
+  shippingUsd: number;
+  shippingLyd: number;
+  totalUsd: number;
+  totalLyd: number;
+  fxMissing: boolean;
+};
+
 export type TenderPricing = {
-  basis: "cbm" | "weight" | "flat";
   lines: TenderPricingLine[];
-  summary: {
-    baseCost: number;
-    marginValue: number;
-    shippingCost: number;
-    finalPrice: number;
-    currency: string;
-  };
+  summary: TenderPricingSummary;
 };
 
 export type SupplierComparison = {

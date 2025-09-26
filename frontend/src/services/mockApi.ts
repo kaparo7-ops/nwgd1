@@ -22,6 +22,8 @@ import type {
   Tender,
   TenderActivity,
   TenderPricing,
+  TenderPricingLine,
+  TenderPricingSummary,
   TenderSiteVisit,
   User
 } from "@/utils/types";
@@ -63,7 +65,8 @@ function loadDatabase(): DatabaseShape {
     const parsed = JSON.parse(stored) as DatabaseShape;
     parsed.tenders = parsed.tenders.map((tender) => ({
       ...tender,
-      specificationBooks: normalizeSpecificationBooks(tender.specificationBooks)
+      specificationBooks: normalizeSpecificationBooks(tender.specificationBooks),
+      pricing: normalizePricing(tender.pricing)
     }));
     return parsed;
   }
@@ -71,7 +74,8 @@ function loadDatabase(): DatabaseShape {
   const db: DatabaseShape = {
     tenders: seedTenders.map((tender) => ({
       ...tender,
-      specificationBooks: normalizeSpecificationBooks(tender.specificationBooks)
+      specificationBooks: normalizeSpecificationBooks(tender.specificationBooks),
+      pricing: normalizePricing(tender.pricing)
     })),
     projects: seedProjects,
     suppliers: seedSuppliers,
@@ -95,7 +99,8 @@ window.addEventListener("storage", (event) => {
     const parsed = JSON.parse(event.newValue) as DatabaseShape;
     parsed.tenders = parsed.tenders.map((tender) => ({
       ...tender,
-      specificationBooks: normalizeSpecificationBooks(tender.specificationBooks)
+      specificationBooks: normalizeSpecificationBooks(tender.specificationBooks),
+      pricing: normalizePricing(tender.pricing)
     }));
     database = parsed;
   }
@@ -130,17 +135,123 @@ export async function getTender(id: string): Promise<Tender | undefined> {
   return database.tenders.find((tender) => tender.id === id);
 }
 
-const defaultPricing = (currency: string): TenderPricing => ({
-  basis: "flat",
-  lines: [],
-  summary: {
-    baseCost: 0,
-    marginValue: 0,
-    shippingCost: 0,
-    finalPrice: 0,
-    currency
-  }
+const createEmptySummary = (): TenderPricingSummary => ({
+  subtotalUsd: 0,
+  subtotalLyd: 0,
+  marginUsd: 0,
+  marginLyd: 0,
+  shippingUsd: 0,
+  shippingLyd: 0,
+  totalUsd: 0,
+  totalLyd: 0,
+  fxMissing: false
 });
+
+const summarizePricing = (lines: TenderPricingLine[]): TenderPricingSummary => {
+  const sum = (key: keyof TenderPricingLine) =>
+    lines.reduce((acc, line) => acc + (typeof line[key] === "number" ? (line[key] as number) : 0), 0);
+
+  return {
+    subtotalUsd: sum("subtotalUsd"),
+    subtotalLyd: sum("subtotalLyd"),
+    marginUsd: sum("marginUsd"),
+    marginLyd: sum("marginLyd"),
+    shippingUsd: sum("shippingUsd"),
+    shippingLyd: sum("shippingLyd"),
+    totalUsd: sum("totalUsd"),
+    totalLyd: sum("totalLyd"),
+    fxMissing: lines.some((line) => line.fxRate === null)
+  } satisfies TenderPricingSummary;
+};
+
+const defaultPricing = (): TenderPricing => ({
+  lines: [],
+  summary: createEmptySummary()
+});
+
+const normalizePricingLine = (line: Partial<TenderPricingLine> & { id: string; item: string }): TenderPricingLine => {
+  if (typeof line.unitCostUsd === "number" && typeof line.subtotalUsd === "number") {
+    const normalized: TenderPricingLine = {
+      id: line.id,
+      item: line.item,
+      quantity: line.quantity ?? 0,
+      unitCostUsd: line.unitCostUsd ?? 0,
+      unitCostLyd: line.unitCostLyd ?? 0,
+      fxRate: typeof line.fxRate === "number" && Number.isFinite(line.fxRate) ? line.fxRate : null,
+      marginPercent: line.marginPercent ?? 0,
+      marginUsd: line.marginUsd ?? 0,
+      marginLyd: line.marginLyd ?? 0,
+      shippingUsd: line.shippingUsd ?? 0,
+      shippingLyd: line.shippingLyd ?? 0,
+      subtotalUsd: line.subtotalUsd ?? 0,
+      subtotalLyd: line.subtotalLyd ?? 0,
+      totalUsd: line.totalUsd ?? 0,
+      totalLyd: line.totalLyd ?? 0,
+      supplier: line.supplier
+    };
+    return normalized;
+  }
+
+  const quantity = Number.isFinite(Number(line.quantity)) ? Number(line.quantity) : 0;
+  const unitCostUsd = Number.isFinite(Number((line as any).unitCost))
+    ? Number((line as any).unitCost)
+    : 0;
+  const marginPercent = Number.isFinite(Number((line as any).margin)) ? Number((line as any).margin) : 0;
+  const shippingUsd = Number.isFinite(Number((line as any).shipping)) ? Number((line as any).shipping) : 0;
+  const subtotalUsd = unitCostUsd * quantity;
+  const marginUsd = subtotalUsd * (marginPercent / 100);
+  const totalUsd = subtotalUsd + marginUsd + shippingUsd;
+
+  return {
+    id: line.id,
+    item: line.item,
+    quantity,
+    unitCostUsd,
+    unitCostLyd: 0,
+    fxRate: null,
+    marginPercent,
+    marginUsd,
+    marginLyd: 0,
+    shippingUsd,
+    shippingLyd: 0,
+    subtotalUsd,
+    subtotalLyd: 0,
+    totalUsd,
+    totalLyd: 0,
+    supplier: line.supplier
+  };
+};
+
+const normalizePricing = (pricing?: Partial<TenderPricing> & { lines?: any[] }): TenderPricing => {
+  if (!pricing) {
+    return defaultPricing();
+  }
+
+  const lines: TenderPricingLine[] = Array.isArray(pricing.lines)
+    ? pricing.lines
+        .filter((line): line is Partial<TenderPricingLine> & { id: string; item: string } =>
+          Boolean(line?.id) && Boolean(line?.item)
+        )
+        .map((line) => normalizePricingLine(line))
+    : [];
+
+  return {
+    lines,
+    summary: summarizePricing(lines)
+  };
+};
+
+const mergePricing = (existing: TenderPricing, incoming?: Partial<TenderPricing>): TenderPricing => {
+  if (!incoming) {
+    return existing;
+  }
+  const normalizedIncoming = normalizePricing(incoming);
+  const lines = normalizedIncoming.lines.length > 0 ? normalizedIncoming.lines : existing.lines;
+  return {
+    lines,
+    summary: summarizePricing(lines)
+  };
+};
 
 const mergeSiteVisit = (
   existing?: TenderSiteVisit,
@@ -190,9 +301,10 @@ export async function saveTender(
     throw new Error("Title is required for new tenders");
   }
 
-  const baseCurrency = tender.currency ?? existing?.currency ?? "USD";
-
   const mergedSiteVisit = mergeSiteVisit(existing?.siteVisit, tender.siteVisit);
+
+  const existingPricing = existing?.pricing ? normalizePricing(existing.pricing) : defaultPricing();
+  const incomingPricing = tender.pricing ? normalizePricing(tender.pricing) : undefined;
 
   const defaults: Tender = {
     id,
@@ -218,7 +330,7 @@ export async function saveTender(
     attachments: existing?.attachments ?? tender.attachments ?? [],
     links: existing?.links ?? tender.links ?? [],
     timeline: existing?.timeline ?? tender.timeline ?? [],
-    pricing: existing?.pricing ?? tender.pricing ?? defaultPricing(baseCurrency),
+    pricing: existingPricing,
     supplierComparisons:
       existing?.supplierComparisons ?? tender.supplierComparisons ?? [],
     alerts: existing?.alerts ?? tender.alerts ?? {
@@ -257,16 +369,7 @@ export async function saveTender(
     attachments: tender.attachments ?? defaults.attachments,
     links: tender.links ?? defaults.links,
     timeline: tender.timeline ?? defaults.timeline,
-    pricing: {
-      ...defaults.pricing,
-      ...tender.pricing,
-      lines: tender.pricing?.lines ?? defaults.pricing.lines,
-      summary: {
-        ...defaults.pricing.summary,
-        ...tender.pricing?.summary,
-        currency: tender.pricing?.summary?.currency ?? defaults.pricing.summary.currency
-      }
-    },
+    pricing: mergePricing(existingPricing, incomingPricing),
     supplierComparisons: tender.supplierComparisons ?? defaults.supplierComparisons,
     alerts: { ...defaults.alerts, ...tender.alerts },
     description: tender.description ?? defaults.description
@@ -560,6 +663,104 @@ export async function exportTendersCsv(options?: {
     .join("\n");
 }
 
+const pricingHeaders = [
+  "Item",
+  "Supplier",
+  "Quantity",
+  "Unit USD",
+  "Unit LYD",
+  "FX rate",
+  "Subtotal USD",
+  "Subtotal LYD",
+  "Margin %",
+  "Margin USD",
+  "Margin LYD",
+  "Shipping USD",
+  "Shipping LYD",
+  "Total USD",
+  "Total LYD"
+];
+
+const formatNumber = (value: number) => {
+  return Number.isFinite(value) ? Number(value).toFixed(2) : "0.00";
+};
+
+const buildPricingMatrix = (pricing: TenderPricing) => {
+  const rows = pricing.lines.map((line) => [
+    line.item,
+    line.supplier ?? "",
+    formatNumber(line.quantity),
+    formatNumber(line.unitCostUsd),
+    formatNumber(line.unitCostLyd),
+    line.fxRate === null ? "" : formatNumber(line.fxRate),
+    formatNumber(line.subtotalUsd),
+    formatNumber(line.subtotalLyd),
+    formatNumber(line.marginPercent),
+    formatNumber(line.marginUsd),
+    formatNumber(line.marginLyd),
+    formatNumber(line.shippingUsd),
+    formatNumber(line.shippingLyd),
+    formatNumber(line.totalUsd),
+    formatNumber(line.totalLyd)
+  ]);
+
+  const summary = pricing.summary;
+  const totalsRow = [
+    "Totals",
+    "",
+    "",
+    "",
+    "",
+    summary.fxMissing ? "FX missing" : "",
+    formatNumber(summary.subtotalUsd),
+    formatNumber(summary.subtotalLyd),
+    "",
+    formatNumber(summary.marginUsd),
+    formatNumber(summary.marginLyd),
+    formatNumber(summary.shippingUsd),
+    formatNumber(summary.shippingLyd),
+    formatNumber(summary.totalUsd),
+    formatNumber(summary.totalLyd)
+  ];
+
+  return [...rows, totalsRow];
+};
+
+export async function exportTenderPricingCsv(tenderId: string): Promise<string> {
+  await latency(80, 160);
+  const tender = database.tenders.find((entry) => entry.id === tenderId);
+  if (!tender) {
+    throw new Error("Tender not found");
+  }
+
+  const pricing = normalizePricing(tender.pricing);
+  const matrix = buildPricingMatrix(pricing);
+  const table = [pricingHeaders, ...matrix];
+
+  return table.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
+}
+
+export async function exportTenderPricingExcel(tenderId: string): Promise<Blob> {
+  await latency(80, 160);
+  const tender = database.tenders.find((entry) => entry.id === tenderId);
+  if (!tender) {
+    throw new Error("Tender not found");
+  }
+
+  const pricing = normalizePricing(tender.pricing);
+  const rows = buildPricingMatrix(pricing);
+
+  const htmlRows = [
+    `<tr>${pricingHeaders.map((header) => `<th>${header}</th>`).join("")}</tr>`,
+    ...rows.map(
+      (row) => `<tr>${row.map((cell) => `<td>${cell || ""}</td>`).join("")}</tr>`
+    )
+  ].join("");
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /></head><body><table border="1">${htmlRows}</table></body></html>`;
+  return new Blob([html], { type: "application/vnd.ms-excel" });
+}
+
 export async function saveInvoice(invoice: Partial<Invoice> & { amount: number }) {
   await latency();
   const id = invoice.id ?? generateId("invoice");
@@ -586,7 +787,11 @@ export async function saveInvoice(invoice: Partial<Invoice> & { amount: number }
 export async function resetDemo() {
   await latency(50, 90);
   database = {
-    tenders: seedTenders,
+    tenders: seedTenders.map((tender) => ({
+      ...tender,
+      specificationBooks: normalizeSpecificationBooks(tender.specificationBooks),
+      pricing: normalizePricing(tender.pricing)
+    })),
     projects: seedProjects,
     suppliers: seedSuppliers,
     invoices: seedInvoices,

@@ -5,6 +5,8 @@ import type { ColumnDef } from "@tanstack/react-table";
 
 import {
   exportTendersCsv,
+  exportTenderPricingCsv,
+  exportTenderPricingExcel,
   listTenders,
   saveTender,
   uploadAttachment,
@@ -30,6 +32,9 @@ import type {
   SpecificationBook,
   Tender,
   TenderActivity,
+  TenderPricing,
+  TenderPricingLine,
+  TenderPricingSummary,
   TenderStatus,
   TenderType
 } from "@/utils/types";
@@ -120,6 +125,105 @@ type SpecificationDraft = {
   file: File | null;
 };
 
+type PricingLineDraft = {
+  id: string;
+  item: string;
+  supplier: string;
+  quantity: string;
+  unitCostUsd: string;
+  fxRate: string;
+  marginPercent: string;
+  shippingUsd: string;
+};
+
+type PricingLineDraftField = keyof Omit<PricingLineDraft, "id">;
+
+const createPricingLineDraft = (): PricingLineDraft => ({
+  id: `pricing-${crypto.randomUUID()}`,
+  item: "",
+  supplier: "",
+  quantity: "1",
+  unitCostUsd: "",
+  fxRate: "",
+  marginPercent: "10",
+  shippingUsd: ""
+});
+
+const parseNumber = (value: string): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const draftHasValues = (draft: PricingLineDraft) => {
+  if (draft.item.trim() || draft.supplier.trim()) {
+    return true;
+  }
+  const numericFields = [draft.quantity, draft.unitCostUsd, draft.marginPercent, draft.shippingUsd];
+  return numericFields.some((field) => parseNumber(field) > 0);
+};
+
+const computeLineFromDraft = (draft: PricingLineDraft): TenderPricingLine => {
+  const quantity = Math.max(parseNumber(draft.quantity) || 0, 0);
+  const unitCostUsd = parseNumber(draft.unitCostUsd);
+  const marginPercent = parseNumber(draft.marginPercent);
+  const shippingUsd = parseNumber(draft.shippingUsd);
+  const subtotalUsd = unitCostUsd * (quantity || 0);
+  const marginUsd = subtotalUsd * (marginPercent / 100);
+  const totalUsd = subtotalUsd + marginUsd + shippingUsd;
+  const fxRate = parseNumber(draft.fxRate);
+  const hasFx = Number.isFinite(fxRate) && fxRate > 0;
+  const converted = hasFx ? fxRate : null;
+  const unitCostLyd = converted ? unitCostUsd * converted : 0;
+  const subtotalLyd = converted ? subtotalUsd * converted : 0;
+  const marginLyd = converted ? marginUsd * converted : 0;
+  const shippingLyd = converted ? shippingUsd * converted : 0;
+  const totalLyd = converted ? totalUsd * converted : 0;
+
+  return {
+    id: draft.id,
+    item: draft.item.trim(),
+    supplier: draft.supplier.trim() || undefined,
+    quantity,
+    unitCostUsd,
+    unitCostLyd,
+    fxRate: converted,
+    marginPercent,
+    marginUsd,
+    marginLyd,
+    shippingUsd,
+    shippingLyd,
+    subtotalUsd,
+    subtotalLyd,
+    totalUsd,
+    totalLyd
+  };
+};
+
+const summarizePricingLines = (lines: TenderPricingLine[]): TenderPricingSummary => ({
+  subtotalUsd: lines.reduce((total, line) => total + line.subtotalUsd, 0),
+  subtotalLyd: lines.reduce((total, line) => total + line.subtotalLyd, 0),
+  marginUsd: lines.reduce((total, line) => total + line.marginUsd, 0),
+  marginLyd: lines.reduce((total, line) => total + line.marginLyd, 0),
+  shippingUsd: lines.reduce((total, line) => total + line.shippingUsd, 0),
+  shippingLyd: lines.reduce((total, line) => total + line.shippingLyd, 0),
+  totalUsd: lines.reduce((total, line) => total + line.totalUsd, 0),
+  totalLyd: lines.reduce((total, line) => total + line.totalLyd, 0),
+  fxMissing: lines.some((line) => line.fxRate === null)
+});
+
+const buildPricingFromDraft = (
+  drafts: PricingLineDraft[],
+  options?: { includeEmpty?: boolean }
+): TenderPricing => {
+  const useAll = options?.includeEmpty ?? false;
+  const relevantDrafts = useAll ? drafts : drafts.filter(draftHasValues);
+  const lines = relevantDrafts.map((draft) => computeLineFromDraft(draft));
+  return {
+    lines,
+    summary: summarizePricingLines(lines)
+  };
+};
+
 type CreateTenderState = {
   reference: string;
   nameEn: string;
@@ -148,6 +252,7 @@ type CreateTenderState = {
   attachments: Attachment[];
   specificationBooks: SpecificationBook[];
   specDraft: SpecificationDraft;
+  pricingLines: PricingLineDraft[];
 };
 
 const columnOrder = [
@@ -297,7 +402,8 @@ const createInitialState = (userName: string): CreateTenderState => ({
     currency: "USD",
     responsible: userName,
     file: null
-  }
+  },
+  pricingLines: [createPricingLineDraft()]
 });
 
 const stateToFormValues = (state: CreateTenderState): TenderFormValues => {
@@ -418,6 +524,44 @@ function TenderDetailsDrawer({
 }) {
   const { t } = useLanguage();
   const [newSpecificationPurchased, setNewSpecificationPurchased] = useState(false);
+
+  const pricingLines = tender?.pricing?.lines ?? [];
+  const pricingSummary =
+    tender?.pricing?.summary ??
+    ({
+      subtotalUsd: 0,
+      subtotalLyd: 0,
+      marginUsd: 0,
+      marginLyd: 0,
+      shippingUsd: 0,
+      shippingLyd: 0,
+      totalUsd: 0,
+      totalLyd: 0,
+      fxMissing: false
+    } satisfies TenderPricingSummary);
+
+  const downloadFile = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+  };
+
+  const handlePricingCsvExport = useCallback(async () => {
+    if (!tender) return;
+    const csv = await exportTenderPricingCsv(tender.id);
+    downloadFile(new Blob([csv], { type: "text/csv" }), `${tender.reference}-pricing.csv`);
+  }, [tender]);
+
+  const handlePricingExcelExport = useCallback(async () => {
+    if (!tender) return;
+    const blob = await exportTenderPricingExcel(tender.id);
+    downloadFile(blob, `${tender.reference}-pricing.xls`);
+  }, [tender]);
 
   useEffect(() => {
     if (!tender) return;
@@ -678,6 +822,125 @@ function TenderDetailsDrawer({
             </div>
             <div className="space-y-4">
               <div className="rounded-2xl border border-border p-4">
+                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <h3 className="text-sm font-semibold text-slate-700">{t("quoteTemplate")}</h3>
+                  {pricingLines.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" size="sm" variant="outline" onClick={handlePricingCsvExport}>
+                        {t("exportCSV")}
+                      </Button>
+                      <Button type="button" size="sm" variant="outline" onClick={handlePricingExcelExport}>
+                        {t("exportExcel")}
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+                {pricingLines.length === 0 ? (
+                  <p className="mt-3 text-xs text-slate-500">{t("notAvailable")}</p>
+                ) : (
+                  <>
+                    {pricingSummary.fxMissing ? (
+                      <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700">
+                        {t("quoteFxMissingWarning")}
+                      </div>
+                    ) : null}
+                    <div className="mt-4 overflow-x-auto">
+                      <table className="min-w-full text-left text-xs text-slate-600">
+                        <thead>
+                          <tr>
+                            <th className="px-3 py-2 font-semibold text-slate-700">{t("quoteItem")}</th>
+                            <th className="px-3 py-2 font-semibold text-slate-700">{t("supplier")}</th>
+                            <th className="px-3 py-2 font-semibold text-slate-700">{t("quantity")}</th>
+                            <th className="px-3 py-2 font-semibold text-slate-700">{t("quoteUnitUsd")}</th>
+                            <th className="px-3 py-2 font-semibold text-slate-700">{t("quoteUnitLyd")}</th>
+                            <th className="px-3 py-2 font-semibold text-slate-700">{t("quoteFxRate")}</th>
+                            <th className="px-3 py-2 font-semibold text-slate-700">{`${t("quoteSubtotal")} (${t("usd")})`}</th>
+                            <th className="px-3 py-2 font-semibold text-slate-700">{`${t("quoteSubtotal")} (${t("lyd")})`}</th>
+                            <th className="px-3 py-2 font-semibold text-slate-700">{t("quoteMarginPercent")}</th>
+                            <th className="px-3 py-2 font-semibold text-slate-700">{`${t("quoteMargin")} (${t("usd")})`}</th>
+                            <th className="px-3 py-2 font-semibold text-slate-700">{`${t("quoteMargin")} (${t("lyd")})`}</th>
+                            <th className="px-3 py-2 font-semibold text-slate-700">{t("quoteShippingUsd")}</th>
+                            <th className="px-3 py-2 font-semibold text-slate-700">{`${t("quoteShipping")} (${t("lyd")})`}</th>
+                            <th className="px-3 py-2 font-semibold text-slate-700">{`${t("quoteGrandTotal")} (${t("usd")})`}</th>
+                            <th className="px-3 py-2 font-semibold text-slate-700">{`${t("quoteGrandTotal")} (${t("lyd")})`}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pricingLines.map((line) => (
+                            <tr key={line.id} className="border-t border-border">
+                              <td className="px-3 py-2 font-medium text-slate-700">{line.item}</td>
+                              <td className="px-3 py-2">{line.supplier ?? ""}</td>
+                              <td className="px-3 py-2">{line.quantity.toLocaleString(locale)}</td>
+                              <td className="px-3 py-2">{formatCurrency(line.unitCostUsd, "USD", locale)}</td>
+                              <td className="px-3 py-2">
+                                {line.fxRate
+                                  ? formatCurrency(line.unitCostLyd, "LYD", locale)
+                                  : t("notAvailable")}
+                              </td>
+                              <td className="px-3 py-2">{line.fxRate ? line.fxRate.toFixed(2) : t("notAvailable")}</td>
+                              <td className="px-3 py-2">{formatCurrency(line.subtotalUsd, "USD", locale)}</td>
+                              <td className="px-3 py-2">
+                                {line.fxRate
+                                  ? formatCurrency(line.subtotalLyd, "LYD", locale)
+                                  : t("notAvailable")}
+                              </td>
+                              <td className="px-3 py-2">{line.marginPercent.toFixed(2)}%</td>
+                              <td className="px-3 py-2">{formatCurrency(line.marginUsd, "USD", locale)}</td>
+                              <td className="px-3 py-2">
+                                {line.fxRate
+                                  ? formatCurrency(line.marginLyd, "LYD", locale)
+                                  : t("notAvailable")}
+                              </td>
+                              <td className="px-3 py-2">{formatCurrency(line.shippingUsd, "USD", locale)}</td>
+                              <td className="px-3 py-2">
+                                {line.fxRate
+                                  ? formatCurrency(line.shippingLyd, "LYD", locale)
+                                  : t("notAvailable")}
+                              </td>
+                              <td className="px-3 py-2">{formatCurrency(line.totalUsd, "USD", locale)}</td>
+                              <td className="px-3 py-2">
+                                {line.fxRate
+                                  ? formatCurrency(line.totalLyd, "LYD", locale)
+                                  : t("notAvailable")}
+                              </td>
+                            </tr>
+                          ))}
+                          <tr className="border-t border-border bg-muted/40 font-semibold text-slate-800">
+                            <td className="px-3 py-2">{t("quoteTotals")}</td>
+                            <td className="px-3 py-2" colSpan={5}></td>
+                            <td className="px-3 py-2">{formatCurrency(pricingSummary.subtotalUsd, "USD", locale)}</td>
+                            <td className="px-3 py-2">
+                              {pricingSummary.fxMissing
+                                ? t("quoteFxMissingShort")
+                                : formatCurrency(pricingSummary.subtotalLyd, "LYD", locale)}
+                            </td>
+                            <td className="px-3 py-2"></td>
+                            <td className="px-3 py-2">{formatCurrency(pricingSummary.marginUsd, "USD", locale)}</td>
+                            <td className="px-3 py-2">
+                              {pricingSummary.fxMissing
+                                ? t("quoteFxMissingShort")
+                                : formatCurrency(pricingSummary.marginLyd, "LYD", locale)}
+                            </td>
+                            <td className="px-3 py-2">{formatCurrency(pricingSummary.shippingUsd, "USD", locale)}</td>
+                            <td className="px-3 py-2">
+                              {pricingSummary.fxMissing
+                                ? t("quoteFxMissingShort")
+                                : formatCurrency(pricingSummary.shippingLyd, "LYD", locale)}
+                            </td>
+                            <td className="px-3 py-2">{formatCurrency(pricingSummary.totalUsd, "USD", locale)}</td>
+                            <td className="px-3 py-2">
+                              {pricingSummary.fxMissing
+                                ? t("quoteFxMissingShort")
+                                : formatCurrency(pricingSummary.totalLyd, "LYD", locale)}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="rounded-2xl border border-border p-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-slate-700">{t("proposals")}</h3>
                   {canManage ? (
@@ -800,6 +1063,16 @@ export function TendersPage() {
   const [activeCreateStep, setActiveCreateStep] = useState<CreateTenderStep>("basics");
   const [submitAttempted, setSubmitAttempted] = useState(false);
 
+  const pricingPreview = useMemo(
+    () => buildPricingFromDraft(createValues.pricingLines, { includeEmpty: true }),
+    [createValues.pricingLines]
+  );
+
+  const pricingForSave = useMemo(
+    () => buildPricingFromDraft(createValues.pricingLines),
+    [createValues.pricingLines]
+  );
+
   const clearFieldError = useCallback((field: keyof TenderFormValues) => {
     setCreateErrors((prev) => {
       if (!prev[field]) return prev;
@@ -856,6 +1129,58 @@ export function TendersPage() {
       attachments: prev.attachments.filter((attachment) => attachment.id !== attachmentId)
     }));
   }, []);
+
+  const handleAddPricingLine = useCallback(() => {
+    setCreateValues((prev) => ({
+      ...prev,
+      pricingLines: [...prev.pricingLines, createPricingLineDraft()]
+    }));
+    resetSubmissionAttempt();
+  }, [resetSubmissionAttempt]);
+
+  const handleDuplicatePricingLine = useCallback(
+    (lineId: string) => {
+      setCreateValues((prev) => {
+        const nextLines: PricingLineDraft[] = [];
+        prev.pricingLines.forEach((line) => {
+          nextLines.push(line);
+          if (line.id === lineId) {
+            nextLines.push({ ...line, id: `pricing-${crypto.randomUUID()}` });
+          }
+        });
+        return { ...prev, pricingLines: nextLines };
+      });
+      resetSubmissionAttempt();
+    },
+    [resetSubmissionAttempt]
+  );
+
+  const handleRemovePricingLine = useCallback(
+    (lineId: string) => {
+      setCreateValues((prev) => {
+        const remaining = prev.pricingLines.filter((line) => line.id !== lineId);
+        return {
+          ...prev,
+          pricingLines: remaining.length > 0 ? remaining : [createPricingLineDraft()]
+        };
+      });
+      resetSubmissionAttempt();
+    },
+    [resetSubmissionAttempt]
+  );
+
+  const handlePricingLineChange = useCallback(
+    (lineId: string, field: PricingLineDraftField, value: string) => {
+      setCreateValues((prev) => ({
+        ...prev,
+        pricingLines: prev.pricingLines.map((line) =>
+          line.id === lineId ? { ...line, [field]: value } : line
+        )
+      }));
+      resetSubmissionAttempt();
+    },
+    [resetSubmissionAttempt]
+  );
 
   const handleSiteVisitPhotoUpload = useCallback(
     async (file: File) => {
@@ -1127,14 +1452,15 @@ export function TendersPage() {
         submittedAt: new Date().toISOString()
       },
       attachments: createValues.attachments,
-      links: []
+      links: [],
+      pricing: pricingForSave
     });
 
     setCreateValues(createInitialState(user.name));
     setCreateErrors({});
     setActiveCreateStep("basics");
     setSubmitAttempted(false);
-  }, [createValues, locale, saveMutation, user.name]);
+  }, [createValues, locale, pricingForSave, saveMutation, user.name]);
 
   const handleEditTender = useCallback(
     (formId: string, tender: Tender) => {
@@ -2513,73 +2839,285 @@ export function TendersPage() {
                     id: "quote",
                     label: stepLabels.quote,
                     content: (
-                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                        <div className="space-y-2">
-                          <label className="text-xs font-semibold text-slate-600">{t("offerValue")}</label>
-                          <Input
-                            type="number"
-                            value={createValues.amount}
-                            onChange={(event) => {
-                              setCreateValues((prev) => ({ ...prev, amount: event.target.value }));
-                              clearFieldError("amount");
-                              resetSubmissionAttempt();
-                            }}
-                          />
-                          {displayedErrors.amount ? (
-                            <p className="text-xs text-red-500">{displayedErrors.amount}</p>
+                      <div className="space-y-6">
+                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                          <div className="space-y-2">
+                            <label className="text-xs font-semibold text-slate-600">{t("offerValue")}</label>
+                            <Input
+                              type="number"
+                              value={createValues.amount}
+                              onChange={(event) => {
+                                setCreateValues((prev) => ({ ...prev, amount: event.target.value }));
+                                clearFieldError("amount");
+                                resetSubmissionAttempt();
+                              }}
+                            />
+                            {displayedErrors.amount ? (
+                              <p className="text-xs text-red-500">{displayedErrors.amount}</p>
+                            ) : null}
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-xs font-semibold text-slate-600">
+                              {locale === "ar" ? "العملة" : "Currency"}
+                            </label>
+                            <Input
+                              value={createValues.currency}
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                setCreateValues((prev) => ({
+                                  ...prev,
+                                  currency: value,
+                                  specDraft: { ...prev.specDraft, currency: value }
+                                }));
+                                clearFieldError("currency");
+                                resetSubmissionAttempt();
+                              }}
+                            />
+                          </div>
+                          <div className="col-span-full space-y-2">
+                            <Input
+                              value={createValues.technicalUrl}
+                              placeholder={locale === "ar" ? "رابط العرض الفني" : "Technical offer link"}
+                              onChange={(event) => {
+                                setCreateValues((prev) => ({ ...prev, technicalUrl: event.target.value }));
+                                clearFieldError("technicalUrl");
+                                resetSubmissionAttempt();
+                              }}
+                            />
+                          </div>
+                          <div className="col-span-full space-y-2">
+                            <Input
+                              value={createValues.financialUrl}
+                              placeholder={locale === "ar" ? "رابط العرض المالي" : "Financial offer link"}
+                              onChange={(event) => {
+                                setCreateValues((prev) => ({ ...prev, financialUrl: event.target.value }));
+                                clearFieldError("financialUrl");
+                                resetSubmissionAttempt();
+                              }}
+                            />
+                          </div>
+                          <div className="col-span-full space-y-2">
+                            <label className="text-xs font-semibold text-slate-600">{t("notes")}</label>
+                            <Textarea
+                              rows={3}
+                              value={createValues.description}
+                              onChange={(event) => {
+                                setCreateValues((prev) => ({ ...prev, description: event.target.value }));
+                                clearFieldError("description");
+                                resetSubmissionAttempt();
+                              }}
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-4">
+                          <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                            <div>
+                              <h4 className="text-sm font-semibold text-slate-700">{t("quoteLines")}</h4>
+                              <p className="text-xs text-slate-500">{t("quoteLinesHint")}</p>
+                            </div>
+                            <Button type="button" variant="outline" onClick={handleAddPricingLine}>
+                              {t("quoteAddRow")}
+                            </Button>
+                          </div>
+                          {pricingForSave.summary.fxMissing ? (
+                            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700">
+                              {t("quoteFxMissingWarning")}
+                            </div>
                           ) : null}
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-xs font-semibold text-slate-600">
-                            {locale === "ar" ? "العملة" : "Currency"}
-                          </label>
-                          <Input
-                            value={createValues.currency}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              setCreateValues((prev) => ({
-                                ...prev,
-                                currency: value,
-                                specDraft: { ...prev.specDraft, currency: value }
-                              }));
-                              clearFieldError("currency");
-                              resetSubmissionAttempt();
-                            }}
-                          />
-                        </div>
-                        <div className="col-span-full space-y-2">
-                          <Input
-                            value={createValues.technicalUrl}
-                            placeholder={locale === "ar" ? "رابط العرض الفني" : "Technical offer link"}
-                            onChange={(event) => {
-                              setCreateValues((prev) => ({ ...prev, technicalUrl: event.target.value }));
-                              clearFieldError("technicalUrl");
-                              resetSubmissionAttempt();
-                            }}
-                          />
-                        </div>
-                        <div className="col-span-full space-y-2">
-                          <Input
-                            value={createValues.financialUrl}
-                            placeholder={locale === "ar" ? "رابط العرض المالي" : "Financial offer link"}
-                            onChange={(event) => {
-                              setCreateValues((prev) => ({ ...prev, financialUrl: event.target.value }));
-                              clearFieldError("financialUrl");
-                              resetSubmissionAttempt();
-                            }}
-                          />
-                        </div>
-                        <div className="col-span-full space-y-2">
-                          <label className="text-xs font-semibold text-slate-600">{t("notes")}</label>
-                          <Textarea
-                            rows={3}
-                            value={createValues.description}
-                            onChange={(event) => {
-                              setCreateValues((prev) => ({ ...prev, description: event.target.value }));
-                              clearFieldError("description");
-                              resetSubmissionAttempt();
-                            }}
-                          />
+                          <div className="space-y-3">
+                            {createValues.pricingLines.map((line, index) => {
+                              const computedLine = pricingPreview.lines[index] ?? computeLineFromDraft(line);
+                              return (
+                                <div key={line.id} className="space-y-3 rounded-2xl border border-border p-4">
+                                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                                    <div className="flex-1 space-y-2">
+                                      <label className="text-xs font-semibold text-slate-600">{t("quoteItem")}</label>
+                                      <Input
+                                        value={line.item}
+                                        onChange={(event) =>
+                                          handlePricingLineChange(line.id, "item", event.target.value)
+                                        }
+                                      />
+                                    </div>
+                                    <div className="flex items-center gap-2 md:justify-end">
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => handleDuplicatePricingLine(line.id)}
+                                      >
+                                        {t("quoteDuplicateRow")}
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => handleRemovePricingLine(line.id)}
+                                      >
+                                        {t("quoteRemoveRow")}
+                                      </Button>
+                                    </div>
+                                  </div>
+                                  <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
+                                    <div className="space-y-2">
+                                      <label className="text-xs font-semibold text-slate-600">{t("supplier")}</label>
+                                      <Input
+                                        value={line.supplier}
+                                        onChange={(event) =>
+                                          handlePricingLineChange(line.id, "supplier", event.target.value)
+                                        }
+                                      />
+                                    </div>
+                                    <div className="space-y-2">
+                                      <label className="text-xs font-semibold text-slate-600">{t("quantity")}</label>
+                                      <Input
+                                        type="number"
+                                        value={line.quantity}
+                                        onChange={(event) =>
+                                          handlePricingLineChange(line.id, "quantity", event.target.value)
+                                        }
+                                      />
+                                    </div>
+                                    <div className="space-y-2">
+                                      <label className="text-xs font-semibold text-slate-600">{t("quoteUnitUsd")}</label>
+                                      <Input
+                                        type="number"
+                                        value={line.unitCostUsd}
+                                        onChange={(event) =>
+                                          handlePricingLineChange(line.id, "unitCostUsd", event.target.value)
+                                        }
+                                      />
+                                    </div>
+                                    <div className="space-y-2">
+                                      <label className="text-xs font-semibold text-slate-600">{t("quoteFxRate")}</label>
+                                      <Input
+                                        type="number"
+                                        value={line.fxRate}
+                                        onChange={(event) =>
+                                          handlePricingLineChange(line.id, "fxRate", event.target.value)
+                                        }
+                                      />
+                                    </div>
+                                    <div className="space-y-2">
+                                      <label className="text-xs font-semibold text-slate-600">{t("quoteMarginPercent")}</label>
+                                      <Input
+                                        type="number"
+                                        value={line.marginPercent}
+                                        onChange={(event) =>
+                                          handlePricingLineChange(line.id, "marginPercent", event.target.value)
+                                        }
+                                      />
+                                    </div>
+                                    <div className="space-y-2">
+                                      <label className="text-xs font-semibold text-slate-600">{t("quoteShippingUsd")}</label>
+                                      <Input
+                                        type="number"
+                                        value={line.shippingUsd}
+                                        onChange={(event) =>
+                                          handlePricingLineChange(line.id, "shippingUsd", event.target.value)
+                                        }
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                                    <div className="rounded-2xl border border-dashed border-border bg-muted/40 p-3">
+                                      <p className="text-xs text-slate-500">{t("quoteLineSubtotal")}</p>
+                                      <p className="text-sm font-semibold text-slate-800">
+                                        {formatCurrency(computedLine.subtotalUsd, "USD", locale)}
+                                      </p>
+                                      <p className="text-xs text-slate-500">
+                                        {computedLine.fxRate
+                                          ? formatCurrency(computedLine.subtotalLyd, "LYD", locale)
+                                          : t("quoteFxMissingShort")}
+                                      </p>
+                                    </div>
+                                    <div className="rounded-2xl border border-dashed border-border bg-muted/40 p-3">
+                                      <p className="text-xs text-slate-500">{t("quoteLineMargin")}</p>
+                                      <p className="text-sm font-semibold text-slate-800">
+                                        {formatCurrency(computedLine.marginUsd, "USD", locale)}
+                                      </p>
+                                      <p className="text-xs text-slate-500">
+                                        {computedLine.fxRate
+                                          ? formatCurrency(computedLine.marginLyd, "LYD", locale)
+                                          : t("quoteFxMissingShort")}
+                                      </p>
+                                    </div>
+                                    <div className="rounded-2xl border border-dashed border-border bg-muted/40 p-3">
+                                      <p className="text-xs text-slate-500">{t("quoteLineShipping")}</p>
+                                      <p className="text-sm font-semibold text-slate-800">
+                                        {formatCurrency(computedLine.shippingUsd, "USD", locale)}
+                                      </p>
+                                      <p className="text-xs text-slate-500">
+                                        {computedLine.fxRate
+                                          ? formatCurrency(computedLine.shippingLyd, "LYD", locale)
+                                          : t("quoteFxMissingShort")}
+                                      </p>
+                                    </div>
+                                    <div className="rounded-2xl border border-dashed border-border bg-muted/40 p-3">
+                                      <p className="text-xs text-slate-500">{t("quoteLineTotal")}</p>
+                                      <p className="text-sm font-semibold text-slate-800">
+                                        {formatCurrency(computedLine.totalUsd, "USD", locale)}
+                                      </p>
+                                      <p className="text-xs text-slate-500">
+                                        {computedLine.fxRate
+                                          ? formatCurrency(computedLine.totalLyd, "LYD", locale)
+                                          : t("quoteFxMissingShort")}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div className="space-y-2">
+                            <h4 className="text-sm font-semibold text-slate-700">{t("quoteTotals")}</h4>
+                            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                              <div className="rounded-2xl border border-border p-3">
+                                <p className="text-xs text-slate-500">{t("quoteSubtotal")}</p>
+                                <p className="text-sm font-semibold text-slate-800">
+                                  {formatCurrency(pricingForSave.summary.subtotalUsd, "USD", locale)}
+                                </p>
+                                <p className="text-xs text-slate-500">
+                                  {pricingForSave.summary.fxMissing
+                                    ? t("quoteFxMissingShort")
+                                    : formatCurrency(pricingForSave.summary.subtotalLyd, "LYD", locale)}
+                                </p>
+                              </div>
+                              <div className="rounded-2xl border border-border p-3">
+                                <p className="text-xs text-slate-500">{t("quoteMargin")}</p>
+                                <p className="text-sm font-semibold text-slate-800">
+                                  {formatCurrency(pricingForSave.summary.marginUsd, "USD", locale)}
+                                </p>
+                                <p className="text-xs text-slate-500">
+                                  {pricingForSave.summary.fxMissing
+                                    ? t("quoteFxMissingShort")
+                                    : formatCurrency(pricingForSave.summary.marginLyd, "LYD", locale)}
+                                </p>
+                              </div>
+                              <div className="rounded-2xl border border-border p-3">
+                                <p className="text-xs text-slate-500">{t("quoteShipping")}</p>
+                                <p className="text-sm font-semibold text-slate-800">
+                                  {formatCurrency(pricingForSave.summary.shippingUsd, "USD", locale)}
+                                </p>
+                                <p className="text-xs text-slate-500">
+                                  {pricingForSave.summary.fxMissing
+                                    ? t("quoteFxMissingShort")
+                                    : formatCurrency(pricingForSave.summary.shippingLyd, "LYD", locale)}
+                                </p>
+                              </div>
+                              <div className="rounded-2xl border border-border p-3">
+                                <p className="text-xs text-slate-500">{t("quoteGrandTotal")}</p>
+                                <p className="text-sm font-semibold text-slate-800">
+                                  {formatCurrency(pricingForSave.summary.totalUsd, "USD", locale)}
+                                </p>
+                                <p className="text-xs text-slate-500">
+                                  {pricingForSave.summary.fxMissing
+                                    ? t("quoteFxMissingShort")
+                                    : formatCurrency(pricingForSave.summary.totalLyd, "LYD", locale)}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     )
