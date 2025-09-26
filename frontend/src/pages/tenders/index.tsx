@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
+import type { LucideIcon } from "lucide-react";
+import { AlertTriangle, CalendarCheck, CalendarClock, Clock } from "lucide-react";
 
 import {
   exportTendersCsv,
@@ -428,7 +430,9 @@ const stateToFormValues = (state: CreateTenderState): TenderFormValues => {
   };
 };
 
-const getDueCategory = (tender: Tender): string => {
+type DueCategory = "overdue" | "dueSoon" | "dueThisMonth" | "upcoming";
+
+const getDueCategory = (tender: Tender): DueCategory => {
   const now = new Date();
   const due = new Date(tender.dueDate);
   const diffDays = Math.floor((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
@@ -437,6 +441,54 @@ const getDueCategory = (tender: Tender): string => {
   if (diffDays <= 14) return "dueThisMonth";
   return "upcoming";
 };
+
+type DueCategoryDetail = {
+  variant: "info" | "success" | "warning" | "danger";
+  icon: LucideIcon;
+  label: Record<"en" | "ar", string>;
+  description: Record<"en" | "ar", string>;
+};
+
+const dueCategoryDetails: Record<DueCategory, DueCategoryDetail> = {
+  overdue: {
+    variant: "danger",
+    icon: AlertTriangle,
+    label: { en: "Overdue", ar: "متأخرة" },
+    description: {
+      en: "Deadline has passed. Needs immediate attention.",
+      ar: "انتهى الموعد النهائي ويتطلب إجراءً عاجلاً."
+    }
+  },
+  dueSoon: {
+    variant: "warning",
+    icon: Clock,
+    label: { en: "Due soon", ar: "مستحقة قريبًا" },
+    description: {
+      en: "Due in three days or less.",
+      ar: "مستحقة خلال ثلاثة أيام أو أقل."
+    }
+  },
+  dueThisMonth: {
+    variant: "info",
+    icon: CalendarClock,
+    label: { en: "Within 2 weeks", ar: "خلال أسبوعين" },
+    description: {
+      en: "Due within the next two weeks.",
+      ar: "مستحق خلال الأسبوعين القادمين."
+    }
+  },
+  upcoming: {
+    variant: "success",
+    icon: CalendarCheck,
+    label: { en: "Upcoming", ar: "قادمة" },
+    description: {
+      en: "More than two weeks remaining.",
+      ar: "يتبقى أكثر من أسبوعين."
+    }
+  }
+};
+
+const dueCategoryOrder: DueCategory[] = ["overdue", "dueSoon", "dueThisMonth", "upcoming"];
 
 const readFormValues = (form: HTMLFormElement, fallback?: Tender): TenderFormValues => {
   const data = new FormData(form);
@@ -1716,6 +1768,21 @@ export function TendersPage() {
     [locale, t]
   );
 
+  const dueLegendItems = useMemo(
+    () =>
+      dueCategoryOrder.map((category) => {
+        const details = dueCategoryDetails[category];
+        return {
+          category,
+          label: details.label[locale],
+          description: details.description[locale],
+          variant: details.variant,
+          Icon: details.icon
+        };
+      }),
+    [locale]
+  );
+
   const columns: ColumnDef<Tender>[] = useMemo(() => {
     return [
       {
@@ -1775,16 +1842,35 @@ export function TendersPage() {
         id: "dueDate",
         header: columnLabels.dueDate,
 
-        cell: ({ row }) => (
-          <div className="space-y-1">
-            <span className="text-sm font-medium text-slate-900">
-              {formatDate(row.original.dueDate, locale) ?? t("notAvailable")}
-            </span>
-            <span className="text-xs text-slate-500">
-              {formatDate(row.original.submissionDate, locale) ?? t("notAvailable")}
-            </span>
-          </div>
-        ),
+        cell: ({ row }) => {
+          const dueDateLabel = formatDate(row.original.dueDate, locale) ?? t("notAvailable");
+          const submissionLabel =
+            formatDate(row.original.submissionDate, locale) ?? t("notAvailable");
+          const dueCategory = getDueCategory(row.original);
+          const detail = dueCategoryDetails[dueCategory];
+          const Icon = detail.icon;
+          const dueLabel = detail.label[locale];
+          const dueDescription = detail.description[locale];
+          const badgeAriaLabel = `${dueLabel} — ${dueDescription}`;
+
+          return (
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2" dir={direction}>
+                <span className="text-sm font-medium text-slate-900">{dueDateLabel}</span>
+                <Badge
+                  variant={detail.variant}
+                  className="flex items-center gap-1"
+                  title={dueDescription}
+                  aria-label={badgeAriaLabel}
+                >
+                  <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>{dueLabel}</span>
+                </Badge>
+              </div>
+              <span className="text-xs text-slate-500">{submissionLabel}</span>
+            </div>
+          );
+        },
         meta: { label: columnLabels.dueDate }
       },
       {
@@ -2176,7 +2262,7 @@ export function TendersPage() {
         meta: { label: columnLabels.actions }
       }
     ];
-  }, [columnLabels, editErrors, handleEditTender, locale, t, can]);
+  }, [columnLabels, direction, editErrors, handleEditTender, locale, t, can]);
 
   const pinnedColumns = useMemo(
     () =>
@@ -3156,21 +3242,55 @@ export function TendersPage() {
             <p className="text-3xl font-semibold text-emerald-600">{summary.won}</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>{locale === "ar" ? "الخاسرة" : "Lost"}</CardTitle>
-            <CardDescription>{locale === "ar" ? "غير ناجحة" : "Unsuccessful"}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-semibold text-amber-600">{summary.lost}</p>
-          </CardContent>
-        </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>{locale === "ar" ? "الخاسرة" : "Lost"}</CardTitle>
+          <CardDescription>{locale === "ar" ? "غير ناجحة" : "Unsuccessful"}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-3xl font-semibold text-amber-600">{summary.lost}</p>
+        </CardContent>
+      </Card>
+    </div>
+
+    <section
+      className="rounded-2xl border border-dashed border-border bg-muted/40 p-4"
+      role="region"
+      aria-labelledby="due-status-legend-heading"
+      dir={direction}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h2 id="due-status-legend-heading" className="text-sm font-semibold text-slate-700">
+            {locale === "ar" ? "دليل حالة الموعد النهائي" : "Deadline status legend"}
+          </h2>
+          <p className="text-xs text-slate-500">
+            {locale === "ar"
+              ? "يشرح معنى ألوان الشارات المستخدمة في عمود المواعيد."
+              : "Explains the color badges that appear in the deadline column."}
+          </p>
+        </div>
       </div>
+      <ul className="mt-3 flex flex-wrap gap-4" role="list">
+        {dueLegendItems.map(({ category, label, description, variant, Icon }) => (
+          <li key={category} className="flex items-start gap-2" role="listitem">
+            <Badge variant={variant} className="mt-0.5 flex items-center gap-1" aria-hidden="true">
+              <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>{label}</span>
+            </Badge>
+            <div className="text-xs text-slate-600">
+              <p className="font-semibold text-slate-700">{label}</p>
+              <p className="text-slate-500">{description}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
 
 
-      <AdvancedDataTable
-        data={tableData}
-        columns={columns}
+    <AdvancedDataTable
+      data={tableData}
+      columns={columns}
         isLoading={isLoading}
         error={isError ? t("error") : null}
         searchableKeys={["reference", "title", "agency", "owner", "tags"]}
