@@ -14,6 +14,7 @@ import type {
   TenderPricingSummary,
   User
 } from "@/utils/types";
+import { createMockAiInsights } from "@/utils/mockAi";
 
 const now = new Date();
 
@@ -280,7 +281,19 @@ export const tenders: Tender[] = [
       siteVisitOverdue: false,
       guaranteeAlert: date(120)
     },
-
+    aiInsights: createMockAiInsights({
+      id: "tender-1",
+      title: "Rehabilitation of Primary Health Clinics",
+      reference: "UNDP-LBY-2024-017",
+      owner: "Procurement Team",
+      agency: "UNDP",
+      amount: 480000,
+      currency: "USD",
+      dueDate: date(7),
+      submissionDate: date(-1),
+      attachments,
+      tags: ["Health", "Construction", "Infrastructure"]
+    }),
     description:
       "Civil works and supply of equipment for three clinics in Sabha and Benghazi."
   },
@@ -385,6 +398,19 @@ export const tenders: Tender[] = [
       siteVisitOverdue: false,
       guaranteeAlert: null
     },
+    aiInsights: createMockAiInsights({
+      id: "tender-2",
+      title: "WASH Supplies Framework",
+      reference: "UNICEF-LBY-ITB-2024-221",
+      owner: "Procurement Team",
+      agency: "UNICEF",
+      amount: 275000,
+      currency: "EUR",
+      dueDate: date(20),
+      submissionDate: date(20),
+      attachments: attachments.slice(0, 2),
+      tags: ["WASH", "Framework", "Supply"]
+    }),
     description: "Multi-lot procurement of hygiene kits and water trucking."
 
   },
@@ -549,6 +575,19 @@ export const tenders: Tender[] = [
       siteVisitOverdue: false,
       guaranteeAlert: date(45)
     },
+    aiInsights: createMockAiInsights({
+      id: "tender-3",
+      title: "Shelter Upgrades in Tripoli",
+      reference: "IOM-LBY-RFP-2024-044",
+      owner: "Projects Team",
+      agency: "IOM",
+      amount: 610000,
+      currency: "USD",
+      dueDate: date(-28),
+      submissionDate: date(-45),
+      attachments: attachments.slice(0, 2),
+      tags: ["Shelter", "Tripoli", "Construction"]
+    }),
 
     description: "Design and build modular shelters for IDP sites."
   }

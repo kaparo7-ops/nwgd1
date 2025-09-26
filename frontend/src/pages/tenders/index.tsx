@@ -3,7 +3,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { LucideIcon } from "lucide-react";
-import { AlertTriangle, CalendarCheck, CalendarClock, Clock } from "lucide-react";
+import { AlertTriangle, CalendarCheck, CalendarClock, Clock, Loader2 } from "lucide-react";
 
 import {
   exportTendersCsv,
@@ -12,7 +12,11 @@ import {
   listTenders,
   saveTender,
   uploadAttachment,
-  removeAttachment
+  removeAttachment,
+  refreshTenderAiSummary,
+  refreshTenderAiRequirements,
+  refreshTenderAiComparisons,
+  refreshTenderAiRisks
 } from "@/services/mockApi";
 import {
   AdvancedDataTable,
@@ -33,6 +37,9 @@ import type {
   Attachment,
   SpecificationBook,
   Tender,
+  TenderAiPriority,
+  TenderAiRequirementStatus,
+  TenderAiRiskLevel,
   TenderActivity,
   TenderPricing,
   TenderPricingLine,
@@ -560,7 +567,8 @@ function TenderDetailsDrawer({
   onUploadAttachment,
   onRemoveAttachment,
   canManage,
-  userName
+  userName,
+  onTenderChange
 }: {
   tender: Tender | null;
   open: boolean;
@@ -573,9 +581,48 @@ function TenderDetailsDrawer({
   onRemoveAttachment?: (attachmentId: string) => Promise<void>;
   canManage: boolean;
   userName: string;
+  onTenderChange?: (tender: Tender) => void;
 }) {
   const { t } = useLanguage();
+  const queryClient = useQueryClient();
   const [newSpecificationPurchased, setNewSpecificationPurchased] = useState(false);
+
+  const attachmentsById = useMemo(
+    () => new Map((tender?.attachments ?? []).map((attachment) => [attachment.id, attachment.fileName])),
+    [tender?.attachments]
+  );
+
+  const requirementStatusVariant: Record<TenderAiRequirementStatus, "success" | "info" | "danger"> = {
+    met: "success",
+    "in-progress": "info",
+    missing: "danger"
+  };
+  const requirementPriorityVariant: Record<TenderAiPriority, "danger" | "warning" | "info"> = {
+    high: "danger",
+    medium: "warning",
+    low: "info"
+  };
+  const riskLevelVariant: Record<TenderAiRiskLevel, "info" | "warning" | "danger"> = {
+    low: "info",
+    medium: "warning",
+    high: "danger"
+  };
+
+  const requirementStatusText: Record<TenderAiRequirementStatus, string> = {
+    met: t("aiRequirementMet"),
+    "in-progress": t("aiRequirementInProgress"),
+    missing: t("aiRequirementMissing")
+  };
+  const priorityText: Record<TenderAiPriority, string> = {
+    high: t("aiPriorityHigh"),
+    medium: t("aiPriorityMedium"),
+    low: t("aiPriorityLow")
+  };
+  const riskLevelText: Record<TenderAiRiskLevel, string> = {
+    low: t("aiRiskLow"),
+    medium: t("aiRiskMedium"),
+    high: t("aiRiskHigh")
+  };
 
   const pricingLines = tender?.pricing?.lines ?? [];
   const pricingSummary =
@@ -615,11 +662,114 @@ function TenderDetailsDrawer({
     downloadFile(blob, `${tender.reference}-pricing.xls`);
   }, [tender]);
 
+  const summaryMutation = useMutation({
+    mutationFn: async () => {
+      if (!tender) {
+        throw new Error("Select a tender before refreshing insights");
+      }
+      return refreshTenderAiSummary(tender.id);
+    },
+    onSuccess: (summary) => {
+      if (!tender) return;
+      const nextTender: Tender = {
+        ...tender,
+        aiInsights: {
+          ...tender.aiInsights,
+          summary,
+          lastAnalyzedAt: summary.updatedAt
+        }
+      };
+      onTenderChange?.(nextTender);
+      queryClient.invalidateQueries({ queryKey: ["tenders"] });
+    }
+  });
+
+  const requirementsMutation = useMutation({
+    mutationFn: async () => {
+      if (!tender) {
+        throw new Error("Select a tender before refreshing insights");
+      }
+      return refreshTenderAiRequirements(tender.id);
+    },
+    onSuccess: (requirements) => {
+      if (!tender) return;
+      const lastUpdated = requirements[0]?.updatedAt ?? tender.aiInsights.lastAnalyzedAt;
+      const nextTender: Tender = {
+        ...tender,
+        aiInsights: {
+          ...tender.aiInsights,
+          requirements,
+          lastAnalyzedAt: lastUpdated
+        }
+      };
+      onTenderChange?.(nextTender);
+      queryClient.invalidateQueries({ queryKey: ["tenders"] });
+    }
+  });
+
+  const comparisonsMutation = useMutation({
+    mutationFn: async () => {
+      if (!tender) {
+        throw new Error("Select a tender before refreshing insights");
+      }
+      return refreshTenderAiComparisons(tender.id);
+    },
+    onSuccess: (comparisons) => {
+      if (!tender) return;
+      const lastUpdated = comparisons[0]?.updatedAt ?? tender.aiInsights.lastAnalyzedAt;
+      const nextTender: Tender = {
+        ...tender,
+        aiInsights: {
+          ...tender.aiInsights,
+          comparisons,
+          lastAnalyzedAt: lastUpdated
+        }
+      };
+      onTenderChange?.(nextTender);
+      queryClient.invalidateQueries({ queryKey: ["tenders"] });
+    }
+  });
+
+  const risksMutation = useMutation({
+    mutationFn: async () => {
+      if (!tender) {
+        throw new Error("Select a tender before refreshing insights");
+      }
+      return refreshTenderAiRisks(tender.id);
+    },
+    onSuccess: (risks) => {
+      if (!tender) return;
+      const lastUpdated = risks[0]?.updatedAt ?? tender.aiInsights.lastAnalyzedAt;
+      const nextTender: Tender = {
+        ...tender,
+        aiInsights: {
+          ...tender.aiInsights,
+          risks,
+          lastAnalyzedAt: lastUpdated
+        }
+      };
+      onTenderChange?.(nextTender);
+      queryClient.invalidateQueries({ queryKey: ["tenders"] });
+    }
+  });
+
   useEffect(() => {
     if (!tender) return;
     setNewSpecificationPurchased(false);
+    summaryMutation.reset();
+    requirementsMutation.reset();
+    comparisonsMutation.reset();
+    risksMutation.reset();
   }, [tender?.id]);
   if (!tender) return null;
+
+  const aiInsights = tender.aiInsights;
+  const aiSummary = aiInsights.summary;
+  const aiRequirements = aiInsights.requirements;
+  const aiComparisons = aiInsights.comparisons;
+  const aiRisks = aiInsights.risks;
+  const lastAnalyzedLabel =
+    formatDate(aiInsights.lastAnalyzedAt, locale) ?? t("notAvailable");
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -1081,6 +1231,234 @@ function TenderDetailsDrawer({
             </div>
           </div>
 
+          <div className="mt-6 space-y-4" id="tender-ai-insights">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-slate-700">{t("aiInsights")}</h3>
+              <Badge variant="info">
+                {t("aiLastAnalyzed")}: {lastAnalyzedLabel}
+              </Badge>
+            </div>
+            <p className="text-xs text-slate-500">{t("aiGeneratedNotice")}</p>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-2xl border border-border p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="text-sm font-semibold text-slate-700">{t("aiSummary")}</h4>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => summaryMutation.mutate()}
+                    disabled={summaryMutation.isPending}
+                  >
+                    {summaryMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        {t("loading")}
+                      </>
+                    ) : (
+                      t("aiRefresh")
+                    )}
+                  </Button>
+                </div>
+                {summaryMutation.isError ? (
+                  <p className="text-xs text-red-600">{t("aiGenerationError")}</p>
+                ) : null}
+                {aiSummary.overview || aiSummary.highlights.length > 0 || aiSummary.actionItems.length > 0 ? (
+                  <>
+                    {aiSummary.overview ? (
+                      <p className="text-sm text-slate-600">{aiSummary.overview}</p>
+                    ) : null}
+                    {aiSummary.highlights.length > 0 ? (
+                      <div>
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                          {t("aiHighlights")}
+                        </p>
+                        <ul className="mt-1 space-y-1 text-xs text-slate-500">
+                          {aiSummary.highlights.map((item, index) => (
+                            <li key={index} className="flex gap-2">
+                              <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary/60" />
+                              <span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                    {aiSummary.actionItems.length > 0 ? (
+                      <div>
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                          {t("aiActions")}
+                        </p>
+                        <ul className="mt-1 space-y-1 text-xs text-slate-500">
+                          {aiSummary.actionItems.map((item, index) => (
+                            <li key={index} className="flex gap-2">
+                              <span className="mt-1 h-1.5 w-1.5 rounded-full bg-amber-500/60" />
+                              <span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="text-xs text-slate-500">{t("aiNoData")}</p>
+                )}
+              </div>
+              <div className="rounded-2xl border border-border p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="text-sm font-semibold text-slate-700">{t("aiRequirements")}</h4>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => requirementsMutation.mutate()}
+                    disabled={requirementsMutation.isPending}
+                  >
+                    {requirementsMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        {t("loading")}
+                      </>
+                    ) : (
+                      t("aiRefresh")
+                    )}
+                  </Button>
+                </div>
+                {requirementsMutation.isError ? (
+                  <p className="text-xs text-red-600">{t("aiGenerationError")}</p>
+                ) : null}
+                {aiRequirements.length === 0 ? (
+                  <p className="text-xs text-slate-500">{t("aiNoData")}</p>
+                ) : (
+                  <div className="space-y-3">
+                    {aiRequirements.map((requirement) => {
+                      const referenceLabel = requirement.references
+                        .map((id) => attachmentsById.get(id) ?? id)
+                        .join(locale === "ar" ? "، " : ", ");
+                      return (
+                        <div key={requirement.id} className="rounded-xl border border-border/60 p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-sm font-medium text-slate-700">{requirement.title}</p>
+                            <Badge variant={requirementStatusVariant[requirement.status]}>
+                              {requirementStatusText[requirement.status]}
+                            </Badge>
+                          </div>
+                          <p className="mt-1 text-xs text-slate-500">{requirement.detail}</p>
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                            <Badge variant={requirementPriorityVariant[requirement.priority]}>
+                              {priorityText[requirement.priority]}
+                            </Badge>
+                            {referenceLabel ? (
+                              <span>
+                                {t("aiReferences")}: {referenceLabel}
+                              </span>
+                            ) : null}
+                            <span>
+                              {t("aiLastUpdated")}: {formatDate(requirement.updatedAt, locale) ?? requirement.updatedAt.slice(0, 10)}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <div className="rounded-2xl border border-border p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="text-sm font-semibold text-slate-700">{t("aiComparisons")}</h4>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => comparisonsMutation.mutate()}
+                    disabled={comparisonsMutation.isPending}
+                  >
+                    {comparisonsMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        {t("loading")}
+                      </>
+                    ) : (
+                      t("aiRefresh")
+                    )}
+                  </Button>
+                </div>
+                {comparisonsMutation.isError ? (
+                  <p className="text-xs text-red-600">{t("aiGenerationError")}</p>
+                ) : null}
+                {aiComparisons.length === 0 ? (
+                  <p className="text-xs text-slate-500">{t("aiNoData")}</p>
+                ) : (
+                  <div className="space-y-3">
+                    {aiComparisons.map((comparison) => {
+                      const confidence = Math.round(comparison.confidence * 100);
+                      return (
+                        <div key={comparison.id} className="rounded-xl border border-border/60 p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-sm font-medium text-slate-700">{comparison.topic}</p>
+                            <Badge variant="info">
+                              {t("aiConfidence")}: {confidence}%
+                            </Badge>
+                          </div>
+                          <p className="mt-1 text-xs text-slate-500">{comparison.rationale}</p>
+                          <p className="mt-2 text-xs font-semibold text-slate-600">
+                            {t("aiRecommendation")}: {comparison.winner}
+                          </p>
+                          <p className="mt-1 text-[11px] text-slate-500">
+                            {t("aiLastUpdated")}: {formatDate(comparison.updatedAt, locale) ?? comparison.updatedAt.slice(0, 10)}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <div className="rounded-2xl border border-border p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="text-sm font-semibold text-slate-700">{t("aiRisks")}</h4>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => risksMutation.mutate()}
+                    disabled={risksMutation.isPending}
+                  >
+                    {risksMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        {t("loading")}
+                      </>
+                    ) : (
+                      t("aiRefresh")
+                    )}
+                  </Button>
+                </div>
+                {risksMutation.isError ? (
+                  <p className="text-xs text-red-600">{t("aiGenerationError")}</p>
+                ) : null}
+                {aiRisks.length === 0 ? (
+                  <p className="text-xs text-slate-500">{t("aiNoData")}</p>
+                ) : (
+                  <div className="space-y-3">
+                    {aiRisks.map((risk) => (
+                      <div key={risk.id} className="rounded-xl border border-border/60 p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-medium text-slate-700">{risk.title}</p>
+                          <Badge variant={riskLevelVariant[risk.level]}>
+                            {riskLevelText[risk.level]}
+                          </Badge>
+                        </div>
+                        <p className="mt-1 text-xs text-slate-500">
+                          <span className="font-semibold text-slate-600">{t("aiImpact")}:</span> {risk.impact}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          <span className="font-semibold text-slate-600">{t("aiMitigation")}:</span> {risk.mitigation}
+                        </p>
+                        <p className="mt-2 text-[11px] text-slate-500">
+                          {t("aiLastUpdated")}: {formatDate(risk.updatedAt, locale) ?? risk.updatedAt.slice(0, 10)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
           <div className="mt-6 rounded-2xl border border-border p-4">
             <h3 className="text-sm font-semibold text-slate-700">{t("timeline")}</h3>
             <div className="mt-3 space-y-3">
@@ -3328,6 +3706,9 @@ export function TendersPage() {
         onRemoveAttachment={canManageAttachments ? handleTenderAttachmentRemove : undefined}
         canManage={canManageAttachments}
         userName={user.name}
+        onTenderChange={(next) =>
+          setSelectedTender((prev) => (prev && prev.id === next.id ? next : prev))
+        }
       />
 
     </div>

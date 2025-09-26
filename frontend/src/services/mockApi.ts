@@ -20,6 +20,11 @@ import type {
   SpecificationBook,
   Supplier,
   Tender,
+  TenderAiComparison,
+  TenderAiInsights,
+  TenderAiRequirement,
+  TenderAiRiskAssessment,
+  TenderAiSummary,
   TenderActivity,
   TenderPricing,
   TenderPricingLine,
@@ -27,6 +32,14 @@ import type {
   TenderSiteVisit,
   User
 } from "@/utils/types";
+import {
+  createMockAiComparisons,
+  createMockAiInsights,
+  createMockAiRequirements,
+  createMockAiRisks,
+  createMockAiSummary,
+  extractAiContext
+} from "@/utils/mockAi";
 
 const STORAGE_KEY = "tender-portal-demo";
 
@@ -41,6 +54,98 @@ type DatabaseShape = {
 
 const latency = (min = 200, max = 650) =>
   new Promise((resolve) => setTimeout(resolve, Math.random() * (max - min) + min));
+
+const isoNow = () => new Date().toISOString();
+
+const fallbackRandomId = (prefix: string) =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? `${prefix}-${crypto.randomUUID()}`
+    : `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
+
+const normalizeAiSummary = (summary?: Partial<TenderAiSummary>): TenderAiSummary => ({
+  overview: summary?.overview ?? "",
+  highlights: summary?.highlights ?? [],
+  actionItems: summary?.actionItems ?? [],
+  updatedAt: summary?.updatedAt ?? isoNow()
+});
+
+const normalizeAiRequirement = (
+  requirement?: Partial<TenderAiRequirement>
+): TenderAiRequirement => ({
+  id: requirement?.id ?? fallbackRandomId("ai-req"),
+  title: requirement?.title ?? "",
+  detail: requirement?.detail ?? "",
+  status: requirement?.status ?? "in-progress",
+  priority: requirement?.priority ?? "medium",
+  references: requirement?.references ?? [],
+  updatedAt: requirement?.updatedAt ?? isoNow()
+});
+
+const normalizeAiComparison = (
+  comparison?: Partial<TenderAiComparison>
+): TenderAiComparison => ({
+  id: comparison?.id ?? fallbackRandomId("ai-cmp"),
+  topic: comparison?.topic ?? "",
+  winner: comparison?.winner ?? "",
+  rationale: comparison?.rationale ?? "",
+  confidence: comparison?.confidence ?? 0.75,
+  updatedAt: comparison?.updatedAt ?? isoNow()
+});
+
+const normalizeAiRisk = (risk?: Partial<TenderAiRiskAssessment>): TenderAiRiskAssessment => ({
+  id: risk?.id ?? fallbackRandomId("ai-risk"),
+  title: risk?.title ?? "",
+  level: risk?.level ?? "medium",
+  impact: risk?.impact ?? "",
+  mitigation: risk?.mitigation ?? "",
+  updatedAt: risk?.updatedAt ?? isoNow()
+});
+
+const normalizeAiInsights = (insights?: Partial<TenderAiInsights>): TenderAiInsights => ({
+  summary: normalizeAiSummary(insights?.summary),
+  requirements: (insights?.requirements ?? []).map((entry) => normalizeAiRequirement(entry)),
+  comparisons: (insights?.comparisons ?? []).map((entry) => normalizeAiComparison(entry)),
+  risks: (insights?.risks ?? []).map((entry) => normalizeAiRisk(entry)),
+  lastAnalyzedAt: insights?.lastAnalyzedAt ?? insights?.summary?.updatedAt ?? isoNow()
+});
+
+const mergeAiInsights = (
+  existing: TenderAiInsights,
+  incoming?: Partial<TenderAiInsights>
+): TenderAiInsights => {
+  if (!incoming) return existing;
+  return normalizeAiInsights({
+    ...existing,
+    ...incoming,
+    summary: incoming.summary ? { ...existing.summary, ...incoming.summary } : existing.summary,
+    requirements: incoming.requirements
+      ? incoming.requirements.map((item) => normalizeAiRequirement(item))
+      : existing.requirements,
+    comparisons: incoming.comparisons
+      ? incoming.comparisons.map((item) => normalizeAiComparison(item))
+      : existing.comparisons,
+    risks: incoming.risks ? incoming.risks.map((item) => normalizeAiRisk(item)) : existing.risks
+  });
+};
+
+const ensureAiInsights = (tender: Tender): TenderAiInsights =>
+  normalizeAiInsights(tender.aiInsights ?? createMockAiInsights(extractAiContext(tender)));
+
+const applyAiUpdate = <T>(
+  tenderId: string,
+  builder: (tender: Tender) => { patch: Partial<TenderAiInsights>; result: T }
+): T => {
+  const tenderIndex = database.tenders.findIndex((item) => item.id === tenderId);
+  if (tenderIndex === -1) {
+    throw new Error("Tender not found");
+  }
+  const tender = database.tenders[tenderIndex];
+  const { patch, result } = builder(tender);
+  const aiInsights = mergeAiInsights(tender.aiInsights, patch);
+  database.tenders[tenderIndex] = { ...tender, aiInsights };
+  persist(database);
+  return result;
+};
 
 type SpecificationBookInput = Omit<SpecificationBook, "purchased"> & { purchased?: boolean };
 
@@ -63,20 +168,26 @@ function loadDatabase(): DatabaseShape {
   const stored = window.localStorage.getItem(STORAGE_KEY);
   if (stored) {
     const parsed = JSON.parse(stored) as DatabaseShape;
-    parsed.tenders = parsed.tenders.map((tender) => ({
-      ...tender,
-      specificationBooks: normalizeSpecificationBooks(tender.specificationBooks),
-      pricing: normalizePricing(tender.pricing)
-    }));
+    parsed.tenders = parsed.tenders.map((tender) => {
+      const normalized = {
+        ...tender,
+        specificationBooks: normalizeSpecificationBooks(tender.specificationBooks),
+        pricing: normalizePricing(tender.pricing)
+      } as Tender;
+      return { ...normalized, aiInsights: ensureAiInsights(normalized) };
+    });
     return parsed;
   }
 
   const db: DatabaseShape = {
-    tenders: seedTenders.map((tender) => ({
-      ...tender,
-      specificationBooks: normalizeSpecificationBooks(tender.specificationBooks),
-      pricing: normalizePricing(tender.pricing)
-    })),
+    tenders: seedTenders.map((tender) => {
+      const normalized = {
+        ...tender,
+        specificationBooks: normalizeSpecificationBooks(tender.specificationBooks),
+        pricing: normalizePricing(tender.pricing)
+      } as Tender;
+      return { ...normalized, aiInsights: ensureAiInsights(normalized) };
+    }),
     projects: seedProjects,
     suppliers: seedSuppliers,
     invoices: seedInvoices,
@@ -97,11 +208,14 @@ let database = loadDatabase();
 window.addEventListener("storage", (event) => {
   if (event.key === STORAGE_KEY && event.newValue) {
     const parsed = JSON.parse(event.newValue) as DatabaseShape;
-    parsed.tenders = parsed.tenders.map((tender) => ({
-      ...tender,
-      specificationBooks: normalizeSpecificationBooks(tender.specificationBooks),
-      pricing: normalizePricing(tender.pricing)
-    }));
+    parsed.tenders = parsed.tenders.map((tender) => {
+      const normalized = {
+        ...tender,
+        specificationBooks: normalizeSpecificationBooks(tender.specificationBooks),
+        pricing: normalizePricing(tender.pricing)
+      } as Tender;
+      return { ...normalized, aiInsights: ensureAiInsights(normalized) };
+    });
     database = parsed;
   }
 });
@@ -306,41 +420,76 @@ export async function saveTender(
   const existingPricing = existing?.pricing ? normalizePricing(existing.pricing) : defaultPricing();
   const incomingPricing = tender.pricing ? normalizePricing(tender.pricing) : undefined;
 
+  const reference = existing?.reference ?? tender.reference ?? `TMP-${id.slice(-5)}`;
+  const title = existing?.title ?? tender.title ?? "Untitled tender";
+  const tenderTypeValue = existing?.tenderType ?? tender.tenderType ?? "RFP";
+  const agency = existing?.agency ?? tender.agency ?? "UN Agency";
+  const amount = existing?.amount ?? tender.amount ?? 0;
+  const currency = existing?.currency ?? tender.currency ?? "USD";
+  const owner = existing?.owner ?? tender.owner ?? "Procurement";
+  const status = existing?.status ?? tender.status ?? "preparing";
+  const statusReason = existing?.statusReason ?? tender.statusReason;
+  const tags = existing?.tags ?? tender.tags ?? [];
+  const submissionDate =
+    existing?.submissionDate ?? tender.submissionDate ?? new Date().toISOString();
+  const dueDate = existing?.dueDate ?? tender.dueDate ?? new Date().toISOString();
+  const createdAt = existing?.createdAt ?? tender.createdAt ?? new Date().toISOString();
+  const attachmentsList = existing?.attachments ?? tender.attachments ?? [];
+
+  const aiContext = {
+    id,
+    title,
+    reference,
+    owner,
+    agency,
+    amount,
+    currency,
+    dueDate,
+    submissionDate,
+    attachments: attachmentsList,
+    tags
+  };
+
   const defaults: Tender = {
     id,
-    reference: existing?.reference ?? tender.reference ?? `TMP-${id.slice(-5)}`,
-    title: existing?.title ?? tender.title ?? "Untitled tender",
-    tenderType: existing?.tenderType ?? tender.tenderType ?? "RFP",
-    agency: existing?.agency ?? tender.agency ?? "UN Agency",
-    amount: existing?.amount ?? tender.amount ?? 0,
-    currency: existing?.currency ?? tender.currency ?? "USD",
-    owner: existing?.owner ?? tender.owner ?? "Procurement",
-    status: existing?.status ?? tender.status ?? "preparing",
-    statusReason: existing?.statusReason ?? tender.statusReason,
-    tags: existing?.tags ?? tender.tags ?? [],
-    submissionDate:
-      existing?.submissionDate ?? tender.submissionDate ?? new Date().toISOString(),
-    dueDate: existing?.dueDate ?? tender.dueDate ?? new Date().toISOString(),
-    createdAt: existing?.createdAt ?? tender.createdAt ?? new Date().toISOString(),
+    reference,
+    title,
+    tenderType: tenderTypeValue,
+    agency,
+    amount,
+    currency,
+    owner,
+    status,
+    statusReason,
+    tags,
+    submissionDate,
+    dueDate,
+    createdAt,
     siteVisit: mergedSiteVisit,
     specificationBooks: normalizeSpecificationBooks(
       existing?.specificationBooks ?? tender.specificationBooks ?? []
     ),
     proposals: existing?.proposals ?? tender.proposals ?? {},
-    attachments: existing?.attachments ?? tender.attachments ?? [],
+    attachments: attachmentsList,
     links: existing?.links ?? tender.links ?? [],
     timeline: existing?.timeline ?? tender.timeline ?? [],
     pricing: existingPricing,
     supplierComparisons:
       existing?.supplierComparisons ?? tender.supplierComparisons ?? [],
-    alerts: existing?.alerts ?? tender.alerts ?? {
-      submissionReminderAt: null,
-      needsSpecificationPurchase: true,
-      siteVisitOverdue: false,
-      guaranteeAlert: null
-    },
-    description: existing?.description ?? tender.description ?? ""
+    alerts:
+      existing?.alerts ?? tender.alerts ?? {
+        submissionReminderAt: null,
+        needsSpecificationPurchase: true,
+        siteVisitOverdue: false,
+        guaranteeAlert: null
+      },
+    description: existing?.description ?? tender.description ?? "",
+    aiInsights: existing
+      ? ensureAiInsights(existing)
+      : normalizeAiInsights(tender.aiInsights ?? createMockAiInsights(aiContext))
   };
+
+  const nextStatus = tender.status ?? defaults.status;
 
   const updated: Tender = {
     ...defaults,
@@ -352,9 +501,9 @@ export async function saveTender(
     amount: tender.amount ?? defaults.amount,
     currency: tender.currency ?? defaults.currency,
     owner: tender.owner ?? defaults.owner,
-    status: tender.status ?? defaults.status,
+    status: nextStatus,
     statusReason:
-      tender.status === "lost" || tender.status === "cancelled"
+      nextStatus === "lost" || nextStatus === "cancelled"
         ? tender.statusReason ?? defaults.statusReason ?? ""
         : tender.statusReason ?? defaults.statusReason,
     tags: tender.tags ?? defaults.tags,
@@ -372,7 +521,8 @@ export async function saveTender(
     pricing: mergePricing(existingPricing, incomingPricing),
     supplierComparisons: tender.supplierComparisons ?? defaults.supplierComparisons,
     alerts: { ...defaults.alerts, ...tender.alerts },
-    description: tender.description ?? defaults.description
+    description: tender.description ?? defaults.description,
+    aiInsights: mergeAiInsights(defaults.aiInsights, tender.aiInsights)
   };
 
   if (existingIndex >= 0) {
@@ -384,6 +534,73 @@ export async function saveTender(
   persist(database);
   return updated;
 
+}
+
+export async function getTenderAiInsights(tenderId: string): Promise<TenderAiInsights> {
+  await latency();
+  const tenderIndex = database.tenders.findIndex((item) => item.id === tenderId);
+  if (tenderIndex === -1) {
+    throw new Error("Tender not found");
+  }
+  const tender = database.tenders[tenderIndex];
+  const aiInsights = ensureAiInsights(tender);
+  database.tenders[tenderIndex] = { ...tender, aiInsights };
+  persist(database);
+  return aiInsights;
+}
+
+export async function refreshTenderAiSummary(tenderId: string): Promise<TenderAiSummary> {
+  await latency();
+  return applyAiUpdate(tenderId, (tender) => {
+    const timestamp = isoNow();
+    const summary = createMockAiSummary(extractAiContext(tender), timestamp);
+    return {
+      patch: { summary, lastAnalyzedAt: summary.updatedAt },
+      result: summary
+    };
+  });
+}
+
+export async function refreshTenderAiRequirements(
+  tenderId: string
+): Promise<TenderAiRequirement[]> {
+  await latency();
+  return applyAiUpdate(tenderId, (tender) => {
+    const timestamp = isoNow();
+    const requirements = createMockAiRequirements(extractAiContext(tender), timestamp);
+    return {
+      patch: { requirements, lastAnalyzedAt: timestamp },
+      result: requirements
+    };
+  });
+}
+
+export async function refreshTenderAiComparisons(
+  tenderId: string
+): Promise<TenderAiComparison[]> {
+  await latency();
+  return applyAiUpdate(tenderId, (tender) => {
+    const timestamp = isoNow();
+    const comparisons = createMockAiComparisons(extractAiContext(tender), timestamp);
+    return {
+      patch: { comparisons, lastAnalyzedAt: timestamp },
+      result: comparisons
+    };
+  });
+}
+
+export async function refreshTenderAiRisks(
+  tenderId: string
+): Promise<TenderAiRiskAssessment[]> {
+  await latency();
+  return applyAiUpdate(tenderId, (tender) => {
+    const timestamp = isoNow();
+    const risks = createMockAiRisks(extractAiContext(tender), timestamp);
+    return {
+      patch: { risks, lastAnalyzedAt: timestamp },
+      result: risks
+    };
+  });
 }
 
 const toFileArray = (files: File[] | FileList): File[] =>
