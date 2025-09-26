@@ -100,6 +100,7 @@ export const safeRandomUUID = (): string => {
       } catch (error) {
         // ignore and fall back to alternate strategies
       }
+
     }
 
     if (typeof crypto.getRandomValues === "function") {
