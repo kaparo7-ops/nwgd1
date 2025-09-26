@@ -32,6 +32,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/providers/auth-provider";
 import { useLanguage } from "@/providers/language-provider";
+import { prefixedRandomId } from "@/utils/random";
 
 import type {
   Attachment,
@@ -148,7 +149,7 @@ type PricingLineDraft = {
 type PricingLineDraftField = keyof Omit<PricingLineDraft, "id">;
 
 const createPricingLineDraft = (): PricingLineDraft => ({
-  id: `pricing-${crypto.randomUUID()}`,
+  id: prefixedRandomId("pricing"),
   item: "",
   supplier: "",
   quantity: "1",
@@ -346,7 +347,7 @@ const parseTags = (value: FormDataEntryValue | null, fallback: string[]): string
 };
 
 const createAttachmentFromFile = (file: File, uploader: string): Attachment => ({
-  id: `att-${crypto.randomUUID()}`,
+  id: prefixedRandomId("att"),
   fileName: file.name,
   fileSize: file.size,
   uploadedAt: new Date().toISOString(),
@@ -1575,7 +1576,7 @@ export function TendersPage() {
         prev.pricingLines.forEach((line) => {
           nextLines.push(line);
           if (line.id === lineId) {
-            nextLines.push({ ...line, id: `pricing-${crypto.randomUUID()}` });
+            nextLines.push({ ...line, id: prefixedRandomId("pricing") });
           }
         });
         return { ...prev, pricingLines: nextLines };
@@ -1667,7 +1668,7 @@ export function TendersPage() {
       if (!draft.number.trim()) return prev;
       const costValue = Number(draft.cost);
       const newBook: SpecificationBook = {
-        id: `book-${crypto.randomUUID()}`,
+        id: prefixedRandomId("book"),
         number: draft.number.trim(),
         purchased: draft.purchased,
         purchaseDate:
@@ -1861,7 +1862,7 @@ export function TendersPage() {
       siteVisit,
       timeline: [
         {
-          id: `activity-${crypto.randomUUID()}`,
+          id: prefixedRandomId("activity"),
           date: new Date().toISOString(),
           actor: user.name,
           description: locale === "ar" ? "تم إنشاء المناقصة" : "Tender created",
@@ -1910,7 +1911,7 @@ export function TendersPage() {
           ? [
               ...tender.timeline,
               {
-                id: `activity-${crypto.randomUUID()}`,
+                id: prefixedRandomId("activity"),
                 date: new Date().toISOString(),
                 actor: user.name,
                 description:
@@ -1975,7 +1976,7 @@ export function TendersPage() {
       purchased && file ? createAttachmentFromFile(file, user.name) : null;
 
     const newBook: SpecificationBook = {
-      id: `book-${crypto.randomUUID()}`,
+      id: prefixedRandomId("book"),
       number,
       purchased,
       purchaseDate,
@@ -1990,7 +1991,7 @@ export function TendersPage() {
     const nextTimeline: TenderActivity[] = [
       ...selectedTender.timeline,
       {
-        id: `activity-${crypto.randomUUID()}`,
+        id: prefixedRandomId("activity"),
         date: new Date().toISOString(),
         actor: user.name,
         description:
@@ -2020,7 +2021,7 @@ export function TendersPage() {
     const nextTimeline: TenderActivity[] = [
       ...selectedTender.timeline,
       {
-        id: `activity-${crypto.randomUUID()}`,
+        id: prefixedRandomId("activity"),
         date: new Date().toISOString(),
         actor: user.name,
         description: locale === "ar" ? "تم تحديث بيانات العروض" : "Proposal details updated",

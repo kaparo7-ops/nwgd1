@@ -41,6 +41,7 @@ import {
   createMockAiSummary,
   extractAiContext
 } from "@/utils/mockAi";
+import { prefixedRandomId } from "@/utils/random";
 
 const STORAGE_KEY = "tender-portal-demo";
 
@@ -58,11 +59,6 @@ const latency = (min = 200, max = 650) =>
 
 const isoNow = () => new Date().toISOString();
 
-const fallbackRandomId = (prefix: string) =>
-  typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? `${prefix}-${crypto.randomUUID()}`
-    : `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
-
 const normalizeAiSummary = (summary?: Partial<TenderAiSummary>): TenderAiSummary => ({
   overview: summary?.overview ?? "",
   highlights: summary?.highlights ?? [],
@@ -73,7 +69,7 @@ const normalizeAiSummary = (summary?: Partial<TenderAiSummary>): TenderAiSummary
 const normalizeAiRequirement = (
   requirement?: Partial<TenderAiRequirement>
 ): TenderAiRequirement => ({
-  id: requirement?.id ?? fallbackRandomId("ai-req"),
+  id: requirement?.id ?? prefixedRandomId("ai-req"),
   title: requirement?.title ?? "",
   detail: requirement?.detail ?? "",
   status: requirement?.status ?? "in-progress",
@@ -85,7 +81,7 @@ const normalizeAiRequirement = (
 const normalizeAiComparison = (
   comparison?: Partial<TenderAiComparison>
 ): TenderAiComparison => ({
-  id: comparison?.id ?? fallbackRandomId("ai-cmp"),
+  id: comparison?.id ?? prefixedRandomId("ai-cmp"),
   topic: comparison?.topic ?? "",
   winner: comparison?.winner ?? "",
   rationale: comparison?.rationale ?? "",
@@ -94,7 +90,7 @@ const normalizeAiComparison = (
 });
 
 const normalizeAiRisk = (risk?: Partial<TenderAiRiskAssessment>): TenderAiRiskAssessment => ({
-  id: risk?.id ?? fallbackRandomId("ai-risk"),
+  id: risk?.id ?? prefixedRandomId("ai-risk"),
   title: risk?.title ?? "",
   level: risk?.level ?? "medium",
   impact: risk?.impact ?? "",
@@ -274,7 +270,26 @@ function persist(db: DatabaseShape) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
 }
 
-const generateId = (prefix: string) => fallbackRandomId(prefix);
+let database = loadDatabase();
+window.addEventListener("storage", (event) => {
+  if (event.key === STORAGE_KEY && event.newValue) {
+    const parsed = JSON.parse(event.newValue) as Partial<DatabaseShape>;
+    database = {
+      tenders: (Array.isArray(parsed.tenders) ? parsed.tenders : seedTenders).map((tender) =>
+        normalizeTenderRecord(tender as Tender)
+      ),
+      projects: Array.isArray(parsed.projects) ? parsed.projects : seedProjects,
+      suppliers: Array.isArray(parsed.suppliers) ? parsed.suppliers : seedSuppliers,
+      invoices: Array.isArray(parsed.invoices) ? parsed.invoices : seedInvoices,
+      notifications: Array.isArray(parsed.notifications)
+        ? parsed.notifications
+        : seedNotifications,
+      users: Array.isArray(parsed.users) ? parsed.users : seedUsers
+    };
+  }
+});
+
+const generateId = (prefix: string) => prefixedRandomId(prefix);
 
 export async function fetchDashboard() {
   await latency();

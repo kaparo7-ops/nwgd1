@@ -18,6 +18,7 @@ import { Checkbox } from "@/components/filters/inputs";
 import { Skeleton } from "@/components/loaders/skeleton";
 import { useLanguage } from "@/providers/language-provider";
 import { cn } from "@/utils/cn";
+import { safeRandomUUID } from "@/utils/random";
 
 export type ColumnPreset = {
   id: string;
@@ -326,7 +327,7 @@ export function AdvancedDataTable<TData>({
     const name = prompt(t("viewNamePrompt" as any) ?? "View name");
     if (!name) return;
     const view: SavedView = {
-      id: crypto.randomUUID(),
+      id: safeRandomUUID(),
       name,
       columnVisibility: { ...columnVisibility },
       wrapText,
