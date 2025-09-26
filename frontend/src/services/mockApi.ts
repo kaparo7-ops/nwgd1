@@ -283,9 +283,12 @@ export async function saveTender(
 
 }
 
+const toFileArray = (files: File[] | FileList): File[] =>
+  Array.isArray(files) ? files : Array.from(files);
+
 export async function uploadAttachment(
   tenderId: string,
-  files: FileList,
+  files: File[] | FileList,
   uploader: string,
   options?: { target?: "attachments" | "siteVisit" }
 ): Promise<Attachment[]> {
@@ -295,7 +298,7 @@ export async function uploadAttachment(
     throw new Error("Tender not found");
   }
 
-  const uploaded: Attachment[] = Array.from(files).map((file) => ({
+  const uploaded: Attachment[] = toFileArray(files).map((file) => ({
     id: generateId("att"),
     fileName: file.name,
     fileSize: file.size,
@@ -327,6 +330,36 @@ export async function uploadAttachment(
   }
 
   tender.attachments = [...uploaded, ...tender.attachments];
+  persist(database);
+  return tender.attachments;
+}
+
+export async function removeAttachment(
+  tenderId: string,
+  attachmentId: string,
+  options?: { target?: "attachments" | "siteVisit" }
+): Promise<Attachment[]> {
+  await latency();
+  const tender = database.tenders.find((item) => item.id === tenderId);
+  if (!tender) {
+    throw new Error("Tender not found");
+  }
+
+  if (options?.target === "siteVisit") {
+    if (!tender.siteVisit) {
+      return [];
+    }
+    const remainingPhotos = tender.siteVisit.photos.filter((photo) => photo.id !== attachmentId);
+    const updatedVisit = mergeSiteVisit(tender.siteVisit, {
+      ...tender.siteVisit,
+      photos: remainingPhotos
+    });
+    tender.siteVisit = updatedVisit;
+    persist(database);
+    return tender.siteVisit?.photos ?? [];
+  }
+
+  tender.attachments = tender.attachments.filter((item) => item.id !== attachmentId);
   persist(database);
   return tender.attachments;
 }

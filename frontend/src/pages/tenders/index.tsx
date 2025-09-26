@@ -7,7 +7,8 @@ import {
   exportTendersCsv,
   listTenders,
   saveTender,
-  uploadAttachment
+  uploadAttachment,
+  removeAttachment
 } from "@/services/mockApi";
 import {
   AdvancedDataTable,
@@ -398,7 +399,8 @@ function TenderDetailsDrawer({
   direction,
   onAddSpecification,
   onUpdateProposal,
-  onUploadAttachments,
+  onUploadAttachment,
+  onRemoveAttachment,
   canManage,
   userName
 }: {
@@ -409,7 +411,8 @@ function TenderDetailsDrawer({
   direction: "rtl" | "ltr";
   onAddSpecification: (formId: string) => void;
   onUpdateProposal: (formId: string) => void;
-  onUploadAttachments: (files: FileList) => void;
+  onUploadAttachment: (file: File) => Promise<void>;
+  onRemoveAttachment?: (attachmentId: string) => Promise<void>;
   canManage: boolean;
   userName: string;
 }) {
@@ -756,7 +759,8 @@ function TenderDetailsDrawer({
                 <h3 className="text-sm font-semibold text-slate-700">{t("attachments")}</h3>
                 <FileUploader
                   attachments={tender.attachments}
-                  onFilesSelected={(files) => onUploadAttachments(files)}
+                  onUploadFile={onUploadAttachment}
+                  onRemoveAttachment={canManage ? onRemoveAttachment : undefined}
                 />
               </div>
             </div>
@@ -787,6 +791,7 @@ export function TendersPage() {
   const { data, isLoading, isError } = useQuery({ queryKey: ["tenders"], queryFn: listTenders });
   const { t, locale, direction } = useLanguage();
   const { can, user } = useAuth();
+  const canManageAttachments = can(["admin", "procurement"]);
   const [selectedTender, setSelectedTender] = useState<Tender | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [createErrors, setCreateErrors] = useState<TenderFormErrors>({});
@@ -833,32 +838,49 @@ export function TendersPage() {
     [activeCreateStep, runStepValidation]
   );
 
-  const handleAttachmentsSelected = useCallback(
-    (files: FileList) => {
-      const newAttachments = Array.from(files).map((file) => createAttachmentFromFile(file, user.name));
+  const handleCreateAttachmentUpload = useCallback(
+    async (file: File) => {
+      const newAttachment = createAttachmentFromFile(file, user.name);
       setCreateValues((prev) => ({
         ...prev,
-        attachments: [...prev.attachments, ...newAttachments]
+        attachments: [...prev.attachments, newAttachment]
       }));
       resetSubmissionAttempt();
     },
     [resetSubmissionAttempt, user.name]
   );
 
-  const handleSiteVisitPhotosSelected = useCallback(
-    (files: FileList) => {
-      const newPhotos = Array.from(files).map((file) => createAttachmentFromFile(file, user.name));
+  const handleCreateAttachmentRemove = useCallback(async (attachmentId: string) => {
+    setCreateValues((prev) => ({
+      ...prev,
+      attachments: prev.attachments.filter((attachment) => attachment.id !== attachmentId)
+    }));
+  }, []);
+
+  const handleSiteVisitPhotoUpload = useCallback(
+    async (file: File) => {
+      const newPhoto = createAttachmentFromFile(file, user.name);
       setCreateValues((prev) => ({
         ...prev,
         siteVisit: {
           ...prev.siteVisit,
-          photos: [...prev.siteVisit.photos, ...newPhotos]
+          photos: [...prev.siteVisit.photos, newPhoto]
         }
       }));
       resetSubmissionAttempt();
     },
     [resetSubmissionAttempt, user.name]
   );
+
+  const handleSiteVisitPhotoRemove = useCallback(async (attachmentId: string) => {
+    setCreateValues((prev) => ({
+      ...prev,
+      siteVisit: {
+        ...prev.siteVisit,
+        photos: prev.siteVisit.photos.filter((photo) => photo.id !== attachmentId)
+      }
+    }));
+  }, []);
 
   const handleSiteVisitRequiredChange = useCallback(
     (checked: boolean) => {
@@ -974,8 +996,8 @@ export function TendersPage() {
   });
 
   const attachmentMutation = useMutation({
-    mutationFn: ({ tenderId, files }: { tenderId: string; files: FileList }) =>
-      uploadAttachment(tenderId, files, user.name),
+    mutationFn: ({ tenderId, file }: { tenderId: string; file: File }) =>
+      uploadAttachment(tenderId, [file], user.name),
 
     onSuccess: (attachments, variables) => {
       queryClient.invalidateQueries({ queryKey: ["tenders"] });
@@ -989,6 +1011,45 @@ export function TendersPage() {
       );
     }
   });
+
+  const removeAttachmentMutation = useMutation({
+    mutationFn: ({ tenderId, attachmentId }: { tenderId: string; attachmentId: string }) =>
+      removeAttachment(tenderId, attachmentId),
+    onSuccess: (attachments, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["tenders"] });
+      setSelectedTender((prev) =>
+        prev && prev.id === variables.tenderId
+          ? {
+              ...prev,
+              attachments
+            }
+          : prev
+      );
+    }
+  });
+
+  const handleTenderAttachmentUpload = useCallback(
+    async (file: File) => {
+      if (!selectedTender) {
+        throw new Error("Select a tender before uploading attachments");
+      }
+      await attachmentMutation.mutateAsync({ tenderId: selectedTender.id, file });
+    },
+    [attachmentMutation, selectedTender]
+  );
+
+  const handleTenderAttachmentRemove = useCallback(
+    async (attachmentId: string) => {
+      if (!selectedTender) {
+        throw new Error("Select a tender before deleting attachments");
+      }
+      await removeAttachmentMutation.mutateAsync({
+        tenderId: selectedTender.id,
+        attachmentId
+      });
+    },
+    [removeAttachmentMutation, selectedTender]
+  );
 
   const handleCreateTender = useCallback(() => {
     const values = stateToFormValues(createValues);
@@ -2205,7 +2266,8 @@ export function TendersPage() {
                             <div className="col-span-full">
                               <FileUploader
                                 attachments={createValues.siteVisit.photos}
-                                onFilesSelected={handleSiteVisitPhotosSelected}
+                                onUploadFile={handleSiteVisitPhotoUpload}
+                                onRemoveAttachment={handleSiteVisitPhotoRemove}
                               />
                             </div>
                           </div>
@@ -2227,7 +2289,8 @@ export function TendersPage() {
                         <div className="col-span-full">
                           <FileUploader
                             attachments={createValues.attachments}
-                            onFilesSelected={handleAttachmentsSelected}
+                            onUploadFile={handleCreateAttachmentUpload}
+                            onRemoveAttachment={handleCreateAttachmentRemove}
                           />
                         </div>
                       </div>
@@ -2603,10 +2666,9 @@ export function TendersPage() {
         direction={direction}
         onAddSpecification={handleAddSpecificationBook}
         onUpdateProposal={handleProposalsUpdate}
-        onUploadAttachments={(files) =>
-          selectedTender ? attachmentMutation.mutate({ tenderId: selectedTender.id, files }) : undefined
-        }
-        canManage={can(["admin", "procurement"])}
+        onUploadAttachment={handleTenderAttachmentUpload}
+        onRemoveAttachment={canManageAttachments ? handleTenderAttachmentRemove : undefined}
+        canManage={canManageAttachments}
         userName={user.name}
       />
 
