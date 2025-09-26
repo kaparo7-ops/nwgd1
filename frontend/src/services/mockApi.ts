@@ -20,6 +20,7 @@ import type {
   SpecificationBook,
   Supplier,
   Tender,
+  TenderAlerts,
   TenderAiComparison,
   TenderAiInsights,
   TenderAiRequirement,
@@ -164,30 +165,100 @@ const normalizeSpecificationBooks = (
   books?: SpecificationBookInput[]
 ): SpecificationBook[] => (books ?? []).map(normalizeSpecificationBook);
 
+const defaultTenderAlerts = (): TenderAlerts => ({
+  submissionReminderAt: null,
+  needsSpecificationPurchase: true,
+  siteVisitOverdue: false,
+  guaranteeAlert: null
+});
+
+const normalizeTenderRecord = (tender: Tender): Tender => {
+  const normalizedSiteVisit = tender.siteVisit
+    ? {
+        ...tender.siteVisit,
+        photos: Array.isArray(tender.siteVisit.photos) ? tender.siteVisit.photos : []
+      }
+    : undefined;
+
+  const normalized: Tender = {
+    ...tender,
+    tags: Array.isArray(tender.tags) ? tender.tags : [],
+    siteVisit: normalizedSiteVisit,
+    specificationBooks: normalizeSpecificationBooks(tender.specificationBooks),
+    proposals: { ...(tender.proposals ?? {}) },
+    attachments: Array.isArray(tender.attachments) ? tender.attachments : [],
+    links: Array.isArray(tender.links) ? tender.links : [],
+    timeline: Array.isArray(tender.timeline) ? tender.timeline : [],
+    pricing: normalizePricing(tender.pricing),
+    supplierComparisons: Array.isArray(tender.supplierComparisons)
+      ? tender.supplierComparisons
+      : [],
+    alerts: {
+      ...defaultTenderAlerts(),
+      ...(tender.alerts ?? {})
+    },
+    description: tender.description ?? ""
+  };
+
+  return { ...normalized, aiInsights: ensureAiInsights(normalized) };
+};
+
 function loadDatabase(): DatabaseShape {
   const stored = window.localStorage.getItem(STORAGE_KEY);
   if (stored) {
-    const parsed = JSON.parse(stored) as DatabaseShape;
-    parsed.tenders = parsed.tenders.map((tender) => {
-      const normalized = {
-        ...tender,
-        specificationBooks: normalizeSpecificationBooks(tender.specificationBooks),
-        pricing: normalizePricing(tender.pricing)
-      } as Tender;
-      return { ...normalized, aiInsights: ensureAiInsights(normalized) };
+    const parsed = JSON.parse(stored) as Partial<DatabaseShape>;
+    let migrated = false;
+
+    const storedTenders = Array.isArray(parsed.tenders) ? parsed.tenders : undefined;
+    const tendersSource = storedTenders ?? seedTenders;
+    if (!storedTenders) {
+      migrated = true;
+    }
+
+    const tenders = tendersSource.map((tender) => {
+      const normalized = normalizeTenderRecord(tender as Tender);
+      if (!migrated && JSON.stringify(tender) !== JSON.stringify(normalized)) {
+        migrated = true;
+      }
+      return normalized;
     });
-    return parsed;
+
+    const projects = Array.isArray(parsed.projects) ? parsed.projects : seedProjects;
+    const suppliers = Array.isArray(parsed.suppliers) ? parsed.suppliers : seedSuppliers;
+    const invoices = Array.isArray(parsed.invoices) ? parsed.invoices : seedInvoices;
+    const notifications = Array.isArray(parsed.notifications)
+      ? parsed.notifications
+      : seedNotifications;
+    const users = Array.isArray(parsed.users) ? parsed.users : seedUsers;
+
+    if (
+      !Array.isArray(parsed.projects) ||
+      !Array.isArray(parsed.suppliers) ||
+      !Array.isArray(parsed.invoices) ||
+      !Array.isArray(parsed.notifications) ||
+      !Array.isArray(parsed.users)
+    ) {
+      migrated = true;
+    }
+
+    const next: DatabaseShape = {
+      tenders,
+      projects,
+      suppliers,
+      invoices,
+      notifications,
+      users
+    };
+
+    if (migrated) {
+      persist(next);
+    }
+
+    return next;
   }
 
   const db: DatabaseShape = {
-    tenders: seedTenders.map((tender) => {
-      const normalized = {
-        ...tender,
-        specificationBooks: normalizeSpecificationBooks(tender.specificationBooks),
-        pricing: normalizePricing(tender.pricing)
-      } as Tender;
-      return { ...normalized, aiInsights: ensureAiInsights(normalized) };
-    }),
+    tenders: seedTenders.map((tender) => normalizeTenderRecord(tender as Tender)),
     projects: seedProjects,
     suppliers: seedSuppliers,
     invoices: seedInvoices,
@@ -207,16 +278,19 @@ let database = loadDatabase();
 
 window.addEventListener("storage", (event) => {
   if (event.key === STORAGE_KEY && event.newValue) {
-    const parsed = JSON.parse(event.newValue) as DatabaseShape;
-    parsed.tenders = parsed.tenders.map((tender) => {
-      const normalized = {
-        ...tender,
-        specificationBooks: normalizeSpecificationBooks(tender.specificationBooks),
-        pricing: normalizePricing(tender.pricing)
-      } as Tender;
-      return { ...normalized, aiInsights: ensureAiInsights(normalized) };
-    });
-    database = parsed;
+    const parsed = JSON.parse(event.newValue) as Partial<DatabaseShape>;
+    database = {
+      tenders: (Array.isArray(parsed.tenders) ? parsed.tenders : seedTenders).map((tender) =>
+        normalizeTenderRecord(tender as Tender)
+      ),
+      projects: Array.isArray(parsed.projects) ? parsed.projects : seedProjects,
+      suppliers: Array.isArray(parsed.suppliers) ? parsed.suppliers : seedSuppliers,
+      invoices: Array.isArray(parsed.invoices) ? parsed.invoices : seedInvoices,
+      notifications: Array.isArray(parsed.notifications)
+        ? parsed.notifications
+        : seedNotifications,
+      users: Array.isArray(parsed.users) ? parsed.users : seedUsers
+    };
   }
 });
 
@@ -1004,11 +1078,7 @@ export async function saveInvoice(invoice: Partial<Invoice> & { amount: number }
 export async function resetDemo() {
   await latency(50, 90);
   database = {
-    tenders: seedTenders.map((tender) => ({
-      ...tender,
-      specificationBooks: normalizeSpecificationBooks(tender.specificationBooks),
-      pricing: normalizePricing(tender.pricing)
-    })),
+    tenders: seedTenders.map((tender) => normalizeTenderRecord(tender as Tender)),
     projects: seedProjects,
     suppliers: seedSuppliers,
     invoices: seedInvoices,
