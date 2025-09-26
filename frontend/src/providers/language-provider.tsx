@@ -118,6 +118,33 @@ export type DictionaryKey =
   | "commandPalettePlaceholder"
   | "presetSaved"
   | "presetRemoved"
+  | "aiInsights"
+  | "aiSummary"
+  | "aiRequirements"
+  | "aiComparisons"
+  | "aiRisks"
+  | "aiHighlights"
+  | "aiActions"
+  | "aiRefresh"
+  | "aiNoData"
+  | "aiLastAnalyzed"
+  | "aiGeneratedNotice"
+  | "aiRequirementMet"
+  | "aiRequirementInProgress"
+  | "aiRequirementMissing"
+  | "aiPriorityHigh"
+  | "aiPriorityMedium"
+  | "aiPriorityLow"
+  | "aiReferences"
+  | "aiLastUpdated"
+  | "aiConfidence"
+  | "aiRecommendation"
+  | "aiRiskLow"
+  | "aiRiskMedium"
+  | "aiRiskHigh"
+  | "aiImpact"
+  | "aiMitigation"
+  | "aiGenerationError"
   | "direction";
 
 type Dictionary = Record<DictionaryKey, string>;
@@ -244,6 +271,33 @@ const dictionaries: Record<Locale, Dictionary> = {
     commandPalettePlaceholder: "Search navigation, tenders, suppliers...",
     presetSaved: "Filter preset saved",
     presetRemoved: "Preset removed",
+    aiInsights: "AI insights",
+    aiSummary: "Summary",
+    aiRequirements: "Requirements",
+    aiComparisons: "Comparisons",
+    aiRisks: "Risk assessment",
+    aiHighlights: "Highlights",
+    aiActions: "Action items",
+    aiRefresh: "Refresh",
+    aiNoData: "No insights yet",
+    aiLastAnalyzed: "Last analyzed",
+    aiGeneratedNotice: "These insights are generated from uploaded attachments.",
+    aiRequirementMet: "Met",
+    aiRequirementInProgress: "In progress",
+    aiRequirementMissing: "Missing",
+    aiPriorityHigh: "High priority",
+    aiPriorityMedium: "Medium priority",
+    aiPriorityLow: "Low priority",
+    aiReferences: "References",
+    aiLastUpdated: "Updated",
+    aiConfidence: "Confidence",
+    aiRecommendation: "Recommendation",
+    aiRiskLow: "Low",
+    aiRiskMedium: "Medium",
+    aiRiskHigh: "High",
+    aiImpact: "Impact",
+    aiMitigation: "Mitigation",
+    aiGenerationError: "Unable to refresh insights right now.",
     direction: "ltr"
   },
   ar: {
@@ -357,6 +411,33 @@ const dictionaries: Record<Locale, Dictionary> = {
     commandPalettePlaceholder: "ابحث في الصفحات والمناقصات...",
     presetSaved: "تم حفظ المرشح",
     presetRemoved: "تم حذف المرشح",
+    aiInsights: "تحليلات الذكاء الاصطناعي",
+    aiSummary: "الملخص",
+    aiRequirements: "المتطلبات",
+    aiComparisons: "المقارنات",
+    aiRisks: "تقييم المخاطر",
+    aiHighlights: "أهم النقاط",
+    aiActions: "إجراءات مقترحة",
+    aiRefresh: "تحديث",
+    aiNoData: "لا توجد تحليلات بعد",
+    aiLastAnalyzed: "آخر تحليل",
+    aiGeneratedNotice: "تم توليد هذه التحليلات من المرفقات.",
+    aiRequirementMet: "مستوفى",
+    aiRequirementInProgress: "قيد المتابعة",
+    aiRequirementMissing: "غير متوفر",
+    aiPriorityHigh: "أولوية عالية",
+    aiPriorityMedium: "أولوية متوسطة",
+    aiPriorityLow: "أولوية منخفضة",
+    aiReferences: "المراجع",
+    aiLastUpdated: "آخر تحديث",
+    aiConfidence: "درجة الثقة",
+    aiRecommendation: "التوصية",
+    aiRiskLow: "منخفض",
+    aiRiskMedium: "متوسط",
+    aiRiskHigh: "مرتفع",
+    aiImpact: "الأثر",
+    aiMitigation: "إجراءات التخفيف",
+    aiGenerationError: "تعذر تحديث التحليلات حالياً.",
     direction: "rtl"
   }
 };

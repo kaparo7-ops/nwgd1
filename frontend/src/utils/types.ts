@@ -85,6 +85,55 @@ export type TenderPricing = {
   summary: TenderPricingSummary;
 };
 
+export type TenderAiRequirementStatus = "met" | "in-progress" | "missing";
+
+export type TenderAiPriority = "high" | "medium" | "low";
+
+export type TenderAiRiskLevel = "low" | "medium" | "high";
+
+export type TenderAiSummary = {
+  overview: string;
+  highlights: string[];
+  actionItems: string[];
+  updatedAt: string;
+};
+
+export type TenderAiRequirement = {
+  id: string;
+  title: string;
+  detail: string;
+  status: TenderAiRequirementStatus;
+  priority: TenderAiPriority;
+  references: string[];
+  updatedAt: string;
+};
+
+export type TenderAiComparison = {
+  id: string;
+  topic: string;
+  winner: string;
+  rationale: string;
+  confidence: number;
+  updatedAt: string;
+};
+
+export type TenderAiRiskAssessment = {
+  id: string;
+  title: string;
+  level: TenderAiRiskLevel;
+  impact: string;
+  mitigation: string;
+  updatedAt: string;
+};
+
+export type TenderAiInsights = {
+  summary: TenderAiSummary;
+  requirements: TenderAiRequirement[];
+  comparisons: TenderAiComparison[];
+  risks: TenderAiRiskAssessment[];
+  lastAnalyzedAt: string;
+};
+
 export type SupplierComparison = {
   item: string;
   suppliers: Array<{
@@ -132,6 +181,7 @@ export type Tender = {
   supplierComparisons: SupplierComparison[];
   alerts: TenderAlerts;
   description: string;
+  aiInsights: TenderAiInsights;
 };
 
 export type Project = {
