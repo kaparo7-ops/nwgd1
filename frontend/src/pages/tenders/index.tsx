@@ -815,7 +815,7 @@ function TenderDetailsDrawer({
             <div className="rounded-2xl border border-border p-4">
               <p className="text-xs text-slate-500">{t("submissionReminder")}</p>
               <p className="mt-1 text-lg font-semibold text-slate-900">
-                {formatDate(tender.alerts.submissionReminderAt, locale) ?? t("notAvailable")}
+                {formatDate(tender.alerts?.submissionReminderAt ?? null, locale) ?? t("notAvailable")}
               </p>
             </div>
             <div className="rounded-2xl border border-border p-4">
