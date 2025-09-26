@@ -2,6 +2,15 @@ const HEX: string[] = Array.from({ length: 256 }, (_, index) =>
   (index + 0x100).toString(16).slice(1)
 );
 
+const getCrypto = (): Crypto | undefined => {
+  if (typeof globalThis === "undefined") {
+    return undefined;
+  }
+
+  const crypto = (globalThis as typeof globalThis & { crypto?: Crypto }).crypto;
+  return typeof crypto === "object" ? crypto : undefined;
+};
+
 const fallbackWithCrypto = (crypto: Crypto): string => {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
@@ -64,10 +73,34 @@ const fallbackWithMathRandom = (): string => {
  * Generate a RFC 4122 version 4 UUID, even in environments where
  * `crypto.randomUUID` is unavailable (e.g. legacy browsers).
  */
+export const ensureCryptoRandomUUID = (): void => {
+  const crypto = getCrypto();
+
+  if (!crypto || typeof crypto.randomUUID === "function") {
+    return;
+  }
+
+  const polyfill =
+    typeof crypto.getRandomValues === "function"
+      ? () => fallbackWithCrypto(crypto)
+      : fallbackWithMathRandom;
+
+  (crypto as Crypto & { randomUUID: () => string }).randomUUID = polyfill;
+};
+
 export const safeRandomUUID = (): string => {
-  if (typeof crypto !== "undefined") {
-    if (typeof crypto.randomUUID === "function") {
-      return crypto.randomUUID();
+  const crypto = getCrypto();
+
+  if (crypto) {
+    const { randomUUID } = crypto as Crypto & { randomUUID?: () => string };
+
+    if (typeof randomUUID === "function") {
+      try {
+        return randomUUID.call(crypto);
+      } catch (error) {
+        // ignore and fall back to alternate strategies
+      }
+
     }
 
     if (typeof crypto.getRandomValues === "function") {
