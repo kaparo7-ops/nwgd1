@@ -274,7 +274,7 @@ function persist(db: DatabaseShape) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
 }
 
-const generateId = (prefix: string) => `${prefix}-${crypto.randomUUID()}`;
+const generateId = (prefix: string) => fallbackRandomId(prefix);
 
 export async function fetchDashboard() {
   await latency();
