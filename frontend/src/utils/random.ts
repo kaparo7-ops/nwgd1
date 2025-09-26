@@ -1,14 +1,39 @@
+declare const global: typeof globalThis | undefined;
+
 const HEX: string[] = Array.from({ length: 256 }, (_, index) =>
   (index + 0x100).toString(16).slice(1)
 );
 
-const getCrypto = (): Crypto | undefined => {
-  if (typeof globalThis === "undefined") {
+type CryptoContainer = {
+  crypto?: Crypto | null | undefined;
+  msCrypto?: Crypto | null | undefined;
+};
+
+const resolveCrypto = (scope: CryptoContainer | undefined): Crypto | undefined => {
+  if (!scope) {
     return undefined;
   }
 
-  const crypto = (globalThis as typeof globalThis & { crypto?: Crypto }).crypto;
-  return typeof crypto === "object" ? crypto : undefined;
+  const candidate = scope.crypto ?? scope.msCrypto;
+  return typeof candidate === "object" && candidate !== null ? candidate : undefined;
+};
+
+const getCrypto = (): Crypto | undefined => {
+  const scopes: (CryptoContainer | undefined)[] = [
+    typeof globalThis !== "undefined" ? (globalThis as CryptoContainer) : undefined,
+    typeof self !== "undefined" ? (self as CryptoContainer) : undefined,
+    typeof window !== "undefined" ? (window as CryptoContainer) : undefined,
+    typeof global !== "undefined" ? (global as CryptoContainer) : undefined
+  ];
+
+  for (const scope of scopes) {
+    const crypto = resolveCrypto(scope);
+    if (crypto) {
+      return crypto;
+    }
+  }
+
+  return undefined;
 };
 
 const fallbackWithCrypto = (crypto: Crypto): string => {
