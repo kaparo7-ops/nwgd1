@@ -270,25 +270,6 @@ function persist(db: DatabaseShape) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
 }
 
-let database = loadDatabase();
-window.addEventListener("storage", (event) => {
-  if (event.key === STORAGE_KEY && event.newValue) {
-    const parsed = JSON.parse(event.newValue) as Partial<DatabaseShape>;
-    database = {
-      tenders: (Array.isArray(parsed.tenders) ? parsed.tenders : seedTenders).map((tender) =>
-        normalizeTenderRecord(tender as Tender)
-      ),
-      projects: Array.isArray(parsed.projects) ? parsed.projects : seedProjects,
-      suppliers: Array.isArray(parsed.suppliers) ? parsed.suppliers : seedSuppliers,
-      invoices: Array.isArray(parsed.invoices) ? parsed.invoices : seedInvoices,
-      notifications: Array.isArray(parsed.notifications)
-        ? parsed.notifications
-        : seedNotifications,
-      users: Array.isArray(parsed.users) ? parsed.users : seedUsers
-    };
-  }
-});
-
 const generateId = (prefix: string) => prefixedRandomId(prefix);
 
 export async function fetchDashboard() {
