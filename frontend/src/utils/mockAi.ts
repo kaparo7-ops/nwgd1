@@ -7,6 +7,7 @@ import type {
   TenderAiRiskAssessment,
   TenderAiSummary
 } from "@/utils/types";
+import { prefixedRandomId } from "@/utils/random";
 
 export type TenderAiContext = {
   id: string;
@@ -23,11 +24,6 @@ export type TenderAiContext = {
 };
 
 const isoNow = () => new Date().toISOString();
-
-const randomId = (prefix: string) =>
-  typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? `${prefix}-${crypto.randomUUID()}`
-    : `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 
 const randomConfidence = () =>
   Math.round((0.75 + Math.random() * 0.2) * 100) / 100;
@@ -112,7 +108,7 @@ export const createMockAiRequirements = (
 
   const requirements: TenderAiRequirement[] = [
     {
-      id: randomId("ai-req"),
+      id: prefixedRandomId("ai-req"),
       title: "Technical scope confirmed",
       detail: `Scope captured in ${attachmentName(attachments, 0, "the TOR")} aligns with the stated objectives.`,
       status: attachments.length > 0 ? "met" : "missing",
@@ -121,7 +117,7 @@ export const createMockAiRequirements = (
       updatedAt: timestamp
     },
     {
-      id: randomId("ai-req"),
+      id: prefixedRandomId("ai-req"),
       title: "Bill of quantities cross-check",
       detail: `Quantities in ${attachmentName(attachments, 1, "the BoQ")} should match the site assessment records.`,
       status: attachments.length > 1 ? "in-progress" : "missing",
@@ -130,7 +126,7 @@ export const createMockAiRequirements = (
       updatedAt: timestamp
     },
     {
-      id: randomId("ai-req"),
+      id: prefixedRandomId("ai-req"),
       title: "Site evidence attached",
       detail: `Photographic evidence in ${attachmentName(attachments, 2, "the site photos archive")} supports field verification.`,
       status: attachments.length > 2 ? "met" : "in-progress",
@@ -150,7 +146,7 @@ export const createMockAiComparisons = (
   const attachments = context.attachments ?? [];
   const comparisons: TenderAiComparison[] = [
     {
-      id: randomId("ai-cmp"),
+      id: prefixedRandomId("ai-cmp"),
       topic: "Specification completeness",
       winner: attachmentName(attachments, 0, "primary TOR"),
       rationale: `Primary specification document provides the clearest articulation of the scope for ${context.agency ?? "the agency"}.`,
@@ -158,7 +154,7 @@ export const createMockAiComparisons = (
       updatedAt: timestamp
     },
     {
-      id: randomId("ai-cmp"),
+      id: prefixedRandomId("ai-cmp"),
       topic: "Pricing transparency",
       winner: attachmentName(attachments, 1, "pricing annex"),
       rationale: `Detailed unit rates in ${attachmentName(attachments, 1, "the BoQ")} support internal cost build-up and variance analysis.`,
@@ -177,7 +173,7 @@ export const createMockAiRisks = (
   const attachments = context.attachments ?? [];
   const risks: TenderAiRiskAssessment[] = [
     {
-      id: randomId("ai-risk"),
+      id: prefixedRandomId("ai-risk"),
       title: "Clarification dependency",
       level: attachments.length > 0 ? "medium" : "high",
       impact: "Pending clarifications could delay pricing sign-off or submission readiness.",
@@ -185,7 +181,7 @@ export const createMockAiRisks = (
       updatedAt: timestamp
     },
     {
-      id: randomId("ai-risk"),
+      id: prefixedRandomId("ai-risk"),
       title: "Site conditions",
       level: attachments.length > 2 ? "low" : "medium",
       impact: "Incomplete understanding of site realities may inflate contingency requirements.",

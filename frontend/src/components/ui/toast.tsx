@@ -1,6 +1,7 @@
 import * as ToastPrimitives from "@radix-ui/react-toast";
 import { X } from "lucide-react";
 import { cn } from "@/utils/cn";
+import { safeRandomUUID } from "@/utils/random";
 import type { ReactNode } from "react";
 
 export type Toast = {
@@ -29,7 +30,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       push: (toast) =>
         setToasts((prev) => [
           ...prev,
-          { id: crypto.randomUUID(), variant: "default", ...toast }
+          { id: safeRandomUUID(), variant: "default", ...toast }
         ]),
       dismiss: (id) => setToasts((prev) => prev.filter((toast) => toast.id !== id))
     }),

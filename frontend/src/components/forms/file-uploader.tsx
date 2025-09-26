@@ -4,6 +4,7 @@ import type { Attachment } from "@/utils/types";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, CheckCircle2, AlertCircle, X, Trash2 } from "lucide-react";
 import { cn } from "@/utils/cn";
+import { safeRandomUUID } from "@/utils/random";
 
 type PendingUpload = {
   id: string;
@@ -21,10 +22,7 @@ type FileUploaderProps = {
   onRemoveAttachment?: (attachmentId: string) => Promise<void>;
 };
 
-const createPendingId = () =>
-  typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-    ? crypto.randomUUID()
-    : Math.random().toString(36).slice(2);
+const createPendingId = () => safeRandomUUID();
 
 const formatFileSize = (size: number) => `${(size / 1024 / 1024).toFixed(1)} MB`;
 
