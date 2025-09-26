@@ -78,6 +78,33 @@ export type DictionaryKey =
   | "pricingMargin"
   | "pricingShipping"
   | "pricingFinalPrice"
+  | "exportExcel"
+  | "supplier"
+  | "usd"
+  | "lyd"
+  | "quoteTemplate"
+  | "quoteLines"
+  | "quoteLinesHint"
+  | "quoteAddRow"
+  | "quoteDuplicateRow"
+  | "quoteRemoveRow"
+  | "quoteItem"
+  | "quoteFxRate"
+  | "quoteMarginPercent"
+  | "quoteShippingUsd"
+  | "quoteUnitUsd"
+  | "quoteUnitLyd"
+  | "quoteLineSubtotal"
+  | "quoteLineMargin"
+  | "quoteLineShipping"
+  | "quoteLineTotal"
+  | "quoteTotals"
+  | "quoteSubtotal"
+  | "quoteMargin"
+  | "quoteShipping"
+  | "quoteGrandTotal"
+  | "quoteFxMissingWarning"
+  | "quoteFxMissingShort"
   | "supplierComparisons"
   | "reminders"
   | "submissionReminder"
@@ -175,6 +202,33 @@ const dictionaries: Record<Locale, Dictionary> = {
     pricingMargin: "Margin",
     pricingShipping: "Shipping",
     pricingFinalPrice: "Final price",
+    exportExcel: "Export Excel",
+    supplier: "Supplier",
+    usd: "USD",
+    lyd: "LYD",
+    quoteTemplate: "Quote template",
+    quoteLines: "Quote lines",
+    quoteLinesHint: "Track USD and LYD amounts per line item to keep proposals consistent.",
+    quoteAddRow: "Add row",
+    quoteDuplicateRow: "Duplicate row",
+    quoteRemoveRow: "Remove row",
+    quoteItem: "Line item",
+    quoteFxRate: "FX rate",
+    quoteMarginPercent: "Margin (%)",
+    quoteShippingUsd: "Shipping (USD)",
+    quoteUnitUsd: "Unit cost (USD)",
+    quoteUnitLyd: "Unit cost (LYD)",
+    quoteLineSubtotal: "Line subtotal",
+    quoteLineMargin: "Line margin",
+    quoteLineShipping: "Line shipping",
+    quoteLineTotal: "Line total",
+    quoteTotals: "Totals",
+    quoteSubtotal: "Subtotal",
+    quoteMargin: "Margin",
+    quoteShipping: "Shipping",
+    quoteGrandTotal: "Grand total",
+    quoteFxMissingWarning: "Add an FX rate to populate LYD conversions.",
+    quoteFxMissingShort: "FX needed",
     supplierComparisons: "Supplier comparisons",
     reminders: "Reminders",
     submissionReminder: "Submission",
@@ -262,6 +316,33 @@ const dictionaries: Record<Locale, Dictionary> = {
     pricingMargin: "الهامش",
     pricingShipping: "الشحن",
     pricingFinalPrice: "السعر النهائي",
+    exportExcel: "تصدير Excel",
+    supplier: "المورد",
+    usd: "دولار",
+    lyd: "دينار",
+    quoteTemplate: "نموذج التسعير",
+    quoteLines: "بنود التسعير",
+    quoteLinesHint: "تابع قيم الدولار والدينار لكل بند لضمان اتساق العروض.",
+    quoteAddRow: "إضافة بند",
+    quoteDuplicateRow: "نسخ البند",
+    quoteRemoveRow: "حذف البند",
+    quoteItem: "البند",
+    quoteFxRate: "سعر الصرف",
+    quoteMarginPercent: "هامش (%)",
+    quoteShippingUsd: "الشحن (دولار)",
+    quoteUnitUsd: "التكلفة (دولار)",
+    quoteUnitLyd: "التكلفة (دينار)",
+    quoteLineSubtotal: "الإجمالي الفرعي للبند",
+    quoteLineMargin: "هامش البند",
+    quoteLineShipping: "شحن البند",
+    quoteLineTotal: "إجمالي البند",
+    quoteTotals: "الإجماليات",
+    quoteSubtotal: "الإجمالي الفرعي",
+    quoteMargin: "الهامش",
+    quoteShipping: "الشحن",
+    quoteGrandTotal: "الإجمالي الكلي",
+    quoteFxMissingWarning: "أضف سعر الصرف لحساب القيم بالدينار.",
+    quoteFxMissingShort: "سعر صرف مطلوب",
     supplierComparisons: "مقارنات الموردين",
     reminders: "التنبيهات",
     submissionReminder: "تسليم العرض",

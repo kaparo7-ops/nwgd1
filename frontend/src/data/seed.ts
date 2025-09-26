@@ -11,6 +11,7 @@ import type {
   Tender,
   TenderActivity,
   TenderPricingLine,
+  TenderPricingSummary,
   User
 } from "@/utils/types";
 
@@ -105,22 +106,53 @@ const tenderActivities = (
 const pricingLine = (
   id: string,
   item: string,
-  unitCost: number,
+  unitCostUsd: number,
   quantity: number,
-  margin: number,
-  shipping: number,
-  currency: string,
+  marginPercent: number,
+  shippingUsd: number,
+  fxRate: number | null,
   supplier?: string
-): TenderPricingLine => ({
-  id,
-  item,
-  unitCost,
-  quantity,
-  margin,
-  shipping,
-  currency,
-  supplier,
-  total: Math.round(unitCost * quantity * (1 + margin / 100) + shipping)
+): TenderPricingLine => {
+  const safeFx = Number.isFinite(fxRate ?? NaN) && fxRate ? fxRate : null;
+  const subtotalUsd = unitCostUsd * quantity;
+  const marginUsd = subtotalUsd * (marginPercent / 100);
+  const totalUsd = subtotalUsd + marginUsd + shippingUsd;
+  const unitCostLyd = safeFx ? unitCostUsd * safeFx : 0;
+  const subtotalLyd = safeFx ? subtotalUsd * safeFx : 0;
+  const marginLyd = safeFx ? marginUsd * safeFx : 0;
+  const shippingLyd = safeFx ? shippingUsd * safeFx : 0;
+  const totalLyd = safeFx ? totalUsd * safeFx : 0;
+
+  return {
+    id,
+    item,
+    quantity,
+    unitCostUsd,
+    unitCostLyd,
+    fxRate: safeFx,
+    marginPercent,
+    marginUsd,
+    marginLyd,
+    shippingUsd,
+    shippingLyd,
+    subtotalUsd,
+    subtotalLyd,
+    totalUsd,
+    totalLyd,
+    supplier
+  };
+};
+
+const summarizePricingLines = (lines: TenderPricingLine[]): TenderPricingSummary => ({
+  subtotalUsd: lines.reduce((acc, line) => acc + line.subtotalUsd, 0),
+  subtotalLyd: lines.reduce((acc, line) => acc + line.subtotalLyd, 0),
+  marginUsd: lines.reduce((acc, line) => acc + line.marginUsd, 0),
+  marginLyd: lines.reduce((acc, line) => acc + line.marginLyd, 0),
+  shippingUsd: lines.reduce((acc, line) => acc + line.shippingUsd, 0),
+  shippingLyd: lines.reduce((acc, line) => acc + line.shippingLyd, 0),
+  totalUsd: lines.reduce((acc, line) => acc + line.totalUsd, 0),
+  totalLyd: lines.reduce((acc, line) => acc + line.totalLyd, 0),
+  fxMissing: lines.some((line) => line.fxRate === null)
 });
 
 
@@ -212,20 +244,25 @@ export const tenders: Tender[] = [
         category: "status"
       }
     ]),
-    pricing: {
-      basis: "cbm",
-      lines: [
-        pricingLine("tender-1-line-1", "Civil works package", 18000, 12, 12, 750, "USD", "Libya Build Co."),
-        pricingLine("tender-1-line-2", "Medical equipment supply", 22000, 8, 10, 500, "USD", "MedTech Solutions")
-      ],
-      summary: {
-        baseCost: 392000,
-        marginValue: 43520,
-        shippingCost: 1250,
-        finalPrice: 436770,
-        currency: "USD"
-      }
-    },
+    pricing: (() => {
+      const lines = [
+        pricingLine("tender-1-line-1", "Civil works package", 18000, 12, 12, 750, 4.85, "Libya Build Co."),
+        pricingLine(
+          "tender-1-line-2",
+          "Medical equipment supply",
+          22000,
+          8,
+          10,
+          500,
+          4.85,
+          "MedTech Solutions"
+        )
+      ];
+      return {
+        lines,
+        summary: summarizePricingLines(lines)
+      };
+    })(),
     supplierComparisons: [
       {
         item: "Solar water heaters",
@@ -315,19 +352,24 @@ export const tenders: Tender[] = [
         category: "reminder"
       }
     ]),
-    pricing: {
-      basis: "weight",
-      lines: [
-        pricingLine("tender-2-line-1", "Hygiene kit assembly", 85, 1500, 18, 0, "EUR", "Desert Logistics")
-      ],
-      summary: {
-        baseCost: 127500,
-        marginValue: 22950,
-        shippingCost: 6400,
-        finalPrice: 156850,
-        currency: "EUR"
-      }
-    },
+    pricing: (() => {
+      const lines = [
+        pricingLine(
+          "tender-2-line-1",
+          "Hygiene kit assembly",
+          85,
+          1500,
+          18,
+          6400,
+          5.1,
+          "Desert Logistics"
+        )
+      ];
+      return {
+        lines,
+        summary: summarizePricingLines(lines)
+      };
+    })(),
     supplierComparisons: [
       {
         item: "Water trucking",
@@ -453,21 +495,44 @@ export const tenders: Tender[] = [
         category: "status"
       }
     ]),
-    pricing: {
-      basis: "flat",
-      lines: [
-        pricingLine("tender-3-line-1", "Modular shelter fabrication", 30500, 10, 14, 0, "USD", "Libya Build Co."),
-        pricingLine("tender-3-line-2", "Installation crew", 8500, 6, 8, 0, "USD", "Libya Build Co."),
-        pricingLine("tender-3-line-3", "Logistics and transport", 6400, 6, 6, 1200, "USD", "Desert Logistics")
-      ],
-      summary: {
-        baseCost: 339000,
-        marginValue: 40200,
-        shippingCost: 7200,
-        finalPrice: 386400,
-        currency: "USD"
-      }
-    },
+    pricing: (() => {
+      const lines = [
+        pricingLine(
+          "tender-3-line-1",
+          "Modular shelter fabrication",
+          30500,
+          10,
+          14,
+          0,
+          4.9,
+          "Libya Build Co."
+        ),
+        pricingLine(
+          "tender-3-line-2",
+          "Installation crew",
+          8500,
+          6,
+          8,
+          0,
+          4.9,
+          "Libya Build Co."
+        ),
+        pricingLine(
+          "tender-3-line-3",
+          "Logistics and transport",
+          6400,
+          6,
+          6,
+          1200,
+          4.9,
+          "Desert Logistics"
+        )
+      ];
+      return {
+        lines,
+        summary: summarizePricingLines(lines)
+      };
+    })(),
     supplierComparisons: [
       {
         item: "Steel structure suppliers",
