@@ -25,6 +25,7 @@ export type TenderSiteVisit = {
 export type SpecificationBook = {
   id: string;
   number: string;
+  purchased: boolean;
   purchaseDate?: string | null;
   cost: number;
   currency: string;

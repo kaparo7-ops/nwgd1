@@ -110,6 +110,7 @@ type CreateTenderStep =
 
 type SpecificationDraft = {
   number: string;
+  purchased: boolean;
   purchaseDate: string;
   method: string;
   cost: string;
@@ -288,6 +289,7 @@ const createInitialState = (userName: string): CreateTenderState => ({
   specificationBooks: [],
   specDraft: {
     number: "",
+    purchased: false,
     purchaseDate: "",
     method: "",
     cost: "",
@@ -412,6 +414,12 @@ function TenderDetailsDrawer({
   userName: string;
 }) {
   const { t } = useLanguage();
+  const [newSpecificationPurchased, setNewSpecificationPurchased] = useState(false);
+
+  useEffect(() => {
+    if (!tender) return;
+    setNewSpecificationPurchased(false);
+  }, [tender?.id]);
   if (!tender) return null;
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -464,7 +472,7 @@ function TenderDetailsDrawer({
             <div className="rounded-2xl border border-border p-4">
               <p className="text-xs text-slate-500">{t("specificationBooks")}</p>
               <p className="mt-1 text-lg font-semibold text-slate-900">
-                {tender.specificationBooks.filter((book) => book.purchaseDate).length}/
+                {tender.specificationBooks.filter((book) => book.purchased).length}/
                 {tender.specificationBooks.length}
               </p>
             </div>
@@ -560,7 +568,9 @@ function TenderDetailsDrawer({
                   {canManage ? (
                     <ModalForm
                       title={t("addSpecificationBook")}
-                      trigger={<Button size="sm">{t("addSpecificationBook")}</Button>}
+                      trigger={
+                        <Button size="sm" onClick={() => setNewSpecificationPurchased(false)}>{t("addSpecificationBook")}</Button>
+                      }
                       onSubmit={() => onAddSpecification(`spec-book-${tender.id}`)}
                     >
                       <form id={`spec-book-${tender.id}`} className="space-y-4">
@@ -568,21 +578,49 @@ function TenderDetailsDrawer({
                           <h4 className="text-sm font-semibold text-slate-700">
                             {locale === "ar" ? "تفاصيل الكراسة" : "Booklet details"}
                           </h4>
+                          <div className="flex flex-col gap-2 rounded-2xl border border-border bg-muted/40 p-3 md:flex-row md:items-center md:justify-between">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-700">
+                                {t("specificationBookPurchasedQuestion")}
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                {t("specificationBookPurchaseHint")}
+                              </p>
+                            </div>
+                            <label className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                name="purchased"
+                                checked={newSpecificationPurchased}
+                                onChange={(event) => setNewSpecificationPurchased(event.target.checked)}
+                                className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                              />
+                              <span className="text-sm font-medium text-slate-700">
+                                {newSpecificationPurchased
+                                  ? t("specificationBookStatusPurchased")
+                                  : t("specificationBookStatusMissing")}
+                              </span>
+                            </label>
+                          </div>
                           <Input name="number" placeholder={t("specificationBookNumber")} required />
-                          <div className="grid gap-3 md:grid-cols-2">
-                            <Input name="purchaseDate" type="date" />
-                            <Input name="method" placeholder={t("specificationBookMethod")} />
-                          </div>
-                          <div className="grid gap-3 md:grid-cols-2">
-                            <Input name="cost" type="number" placeholder={t("specificationBookCost")} />
-                            <Input name="currency" defaultValue={tender.currency} />
-                          </div>
-                          <Input
-                            name="responsible"
-                            placeholder={t("specificationBookResponsible")}
-                            defaultValue={userName}
-                          />
-                          <Input name="receipt" type="file" accept="application/pdf,image/*" />
+                          {newSpecificationPurchased ? (
+                            <>
+                              <div className="grid gap-3 md:grid-cols-2">
+                                <Input name="purchaseDate" type="date" />
+                                <Input name="method" placeholder={t("specificationBookMethod")} />
+                              </div>
+                              <div className="grid gap-3 md:grid-cols-2">
+                                <Input name="cost" type="number" placeholder={t("specificationBookCost")} />
+                                <Input name="currency" defaultValue={tender.currency} />
+                              </div>
+                              <Input
+                                name="responsible"
+                                placeholder={t("specificationBookResponsible")}
+                                defaultValue={userName}
+                              />
+                              <Input name="receipt" type="file" accept="application/pdf,image/*" />
+                            </>
+                          ) : null}
                         </section>
                       </form>
                     </ModalForm>
@@ -601,32 +639,34 @@ function TenderDetailsDrawer({
                               {formatDate(book.purchaseDate ?? undefined, locale) ?? t("notAvailable")}
                             </p>
                           </div>
-                          <Badge variant={book.purchaseDate ? "success" : "danger"}>
-                            {book.purchaseDate
+                          <Badge variant={book.purchased ? "success" : "danger"}>
+                            {book.purchased
                               ? t("specificationBookStatusPurchased")
                               : t("specificationBookStatusMissing")}
                           </Badge>
                         </div>
-                        <div className="mt-2 grid gap-2 text-xs text-slate-500 md:grid-cols-2">
-                          <span>
-                            {t("specificationBookCost")}:
-                            {" "}
-                            {formatCurrency(book.cost, book.currency, locale)}
-                          </span>
-                          <span>
-                            {t("specificationBookResponsible")}: {book.responsible}
-                          </span>
-                          <span>{t("specificationBookMethod")}: {book.purchaseMethod}</span>
-                          {book.attachment ? (
-                            <a
-                              href={book.attachment.previewUrl ?? "#"}
-                              className="text-primary hover:underline"
-                              download={book.attachment.fileName}
-                            >
-                              {book.attachment.fileName}
-                            </a>
-                          ) : null}
-                        </div>
+                        {book.purchased ? (
+                          <div className="mt-2 grid gap-2 text-xs text-slate-500 md:grid-cols-2">
+                            <span>
+                              {t("specificationBookCost")}:
+                              {" "}
+                              {formatCurrency(book.cost, book.currency, locale)}
+                            </span>
+                            <span>
+                              {t("specificationBookResponsible")}: {book.responsible}
+                            </span>
+                            <span>{t("specificationBookMethod")}: {book.purchaseMethod}</span>
+                            {book.attachment ? (
+                              <a
+                                href={book.attachment.previewUrl ?? "#"}
+                                className="text-primary hover:underline"
+                                download={book.attachment.fileName}
+                              >
+                                {book.attachment.fileName}
+                              </a>
+                            ) : null}
+                          </div>
+                        ) : null}
                       </div>
                     ))
                   )}
@@ -852,18 +892,26 @@ export function TendersPage() {
       const newBook: SpecificationBook = {
         id: `book-${crypto.randomUUID()}`,
         number: draft.number.trim(),
-        purchaseDate: draft.purchaseDate ? new Date(draft.purchaseDate).toISOString() : null,
-        cost: Number.isNaN(costValue) ? 0 : costValue,
+        purchased: draft.purchased,
+        purchaseDate:
+          draft.purchased && draft.purchaseDate
+            ? new Date(draft.purchaseDate).toISOString()
+            : null,
+        cost: draft.purchased && !Number.isNaN(costValue) ? costValue : 0,
         currency: draft.currency || prev.currency,
-        purchaseMethod: draft.method,
-        responsible: draft.responsible.trim() || user.name,
-        attachment: draft.file ? createAttachmentFromFile(draft.file, user.name) : null
+        purchaseMethod: draft.purchased ? draft.method : "",
+        responsible: draft.purchased ? draft.responsible.trim() || user.name : "",
+        attachment:
+          draft.purchased && draft.file
+            ? createAttachmentFromFile(draft.file, user.name)
+            : null
       };
       return {
         ...prev,
         specificationBooks: [...prev.specificationBooks, newBook],
         specDraft: {
           number: "",
+          purchased: false,
           purchaseDate: "",
           method: "",
           cost: "",
@@ -1006,7 +1054,7 @@ export function TendersPage() {
       ],
       alerts: {
         submissionReminderAt: dueDate,
-        needsSpecificationPurchase: createValues.specificationBooks.every((book) => !book.purchaseDate),
+        needsSpecificationPurchase: createValues.specificationBooks.every((book) => !book.purchased),
         siteVisitOverdue: false,
         guaranteeAlert: null
       },
@@ -1092,25 +1140,29 @@ export function TendersPage() {
     const formData = new FormData(form);
     const number = String(formData.get("number") ?? "").trim();
     if (!number) return;
-    const cost = Number(formData.get("cost") ?? 0);
+    const purchased = formData.get("purchased") === "on";
+    const costValue = Number(formData.get("cost") ?? 0);
     const currency = String(formData.get("currency") ?? selectedTender.currency);
     const purchaseDateValue = formData.get("purchaseDate");
     const purchaseDate =
-      typeof purchaseDateValue === "string" && purchaseDateValue
+      purchased && typeof purchaseDateValue === "string" && purchaseDateValue
         ? new Date(purchaseDateValue).toISOString()
         : null;
-    const purchaseMethod = String(formData.get("method") ?? "");
-    const responsible = String(formData.get("responsible") ?? user.name);
+    const purchaseMethod = purchased ? String(formData.get("method") ?? "") : "";
+    const responsibleValue = String(formData.get("responsible") ?? user.name).trim();
+    const responsible = purchased ? responsibleValue || user.name : "";
     const fileInput = form.elements.namedItem("receipt") as HTMLInputElement | null;
     const file = fileInput?.files?.[0];
 
-    const attachment = file ? createAttachmentFromFile(file, user.name) : null;
+    const attachment =
+      purchased && file ? createAttachmentFromFile(file, user.name) : null;
 
     const newBook: SpecificationBook = {
       id: `book-${crypto.randomUUID()}`,
       number,
+      purchased,
       purchaseDate,
-      cost,
+      cost: purchased && !Number.isNaN(costValue) ? costValue : 0,
       currency,
       purchaseMethod,
       responsible,
@@ -1137,7 +1189,7 @@ export function TendersPage() {
       timeline: nextTimeline,
       alerts: {
         ...selectedTender.alerts,
-        needsSpecificationPurchase: nextBooks.every((book) => !book.purchaseDate)
+        needsSpecificationPurchase: nextBooks.every((book) => !book.purchased)
       }
     });
   };
@@ -1467,8 +1519,8 @@ export function TendersPage() {
         id: "specification",
         header: columnLabels.specification,
         cell: ({ row }) => (
-          <Badge variant={row.original.specificationBooks.some((book) => book.purchaseDate) ? "success" : "danger"}>
-            {row.original.specificationBooks.some((book) => book.purchaseDate)
+          <Badge variant={row.original.specificationBooks.some((book) => book.purchased) ? "success" : "danger"}>
+            {row.original.specificationBooks.some((book) => book.purchased)
               ? locale === "ar"
                 ? "تم الشراء"
                 : "Purchased"
@@ -2186,6 +2238,50 @@ export function TendersPage() {
                     label: stepLabels.specification,
                     content: (
                       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        <div className="col-span-full flex flex-col gap-2 rounded-2xl border border-border bg-muted/40 p-4 md:flex-row md:items-center md:justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-700">
+                              {t("specificationBookPurchasedQuestion")}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              {t("specificationBookPurchaseHint")}
+                            </p>
+                          </div>
+                          <label className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              name="purchased"
+                              checked={createValues.specDraft.purchased}
+                              onChange={(event) => {
+                                const checked = event.target.checked;
+                                setCreateValues((prev) => ({
+                                  ...prev,
+                                  specDraft: checked
+                                    ? {
+                                        ...prev.specDraft,
+                                        purchased: true,
+                                        responsible: prev.specDraft.responsible || user.name
+                                      }
+                                    : {
+                                        ...prev.specDraft,
+                                        purchased: false,
+                                        purchaseDate: "",
+                                        method: "",
+                                        cost: "",
+                                        file: null
+                                      }
+                                }));
+                                resetSubmissionAttempt();
+                              }}
+                              className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                            />
+                            <span className="text-sm font-medium text-slate-700">
+                              {createValues.specDraft.purchased
+                                ? t("specificationBookStatusPurchased")
+                                : t("specificationBookStatusMissing")}
+                            </span>
+                          </label>
+                        </div>
                         <div className="space-y-2">
                           <label className="text-xs font-semibold text-slate-600">
                             {t("specificationBookNumber")}
@@ -2202,105 +2298,109 @@ export function TendersPage() {
                             }}
                           />
                         </div>
-                        <div className="space-y-2">
-                          <label className="text-xs font-semibold text-slate-600">
-                            {locale === "ar" ? "تاريخ الشراء" : "Purchase date"}
-                          </label>
-                          <Input
-                            type="date"
-                            value={createValues.specDraft.purchaseDate}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              setCreateValues((prev) => ({
-                                ...prev,
-                                specDraft: { ...prev.specDraft, purchaseDate: value }
-                              }));
-                              resetSubmissionAttempt();
-                            }}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-xs font-semibold text-slate-600">
-                            {t("specificationBookMethod")}
-                          </label>
-                          <Input
-                            value={createValues.specDraft.method}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              setCreateValues((prev) => ({
-                                ...prev,
-                                specDraft: { ...prev.specDraft, method: value }
-                              }));
-                              resetSubmissionAttempt();
-                            }}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-xs font-semibold text-slate-600">
-                            {t("specificationBookCost")}
-                          </label>
-                          <Input
-                            type="number"
-                            value={createValues.specDraft.cost}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              setCreateValues((prev) => ({
-                                ...prev,
-                                specDraft: { ...prev.specDraft, cost: value }
-                              }));
-                              resetSubmissionAttempt();
-                            }}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-xs font-semibold text-slate-600">
-                            {locale === "ar" ? "العملة" : "Currency"}
-                          </label>
-                          <Input
-                            value={createValues.specDraft.currency}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              setCreateValues((prev) => ({
-                                ...prev,
-                                specDraft: { ...prev.specDraft, currency: value }
-                              }));
-                              resetSubmissionAttempt();
-                            }}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-xs font-semibold text-slate-600">
-                            {t("specificationBookResponsible")}
-                          </label>
-                          <Input
-                            value={createValues.specDraft.responsible}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              setCreateValues((prev) => ({
-                                ...prev,
-                                specDraft: { ...prev.specDraft, responsible: value }
-                              }));
-                              resetSubmissionAttempt();
-                            }}
-                          />
-                        </div>
-                        <div className="col-span-full space-y-2">
-                          <label className="text-xs font-semibold text-slate-600">
-                            {t("specificationBookReceipt")}
-                          </label>
-                          <Input
-                            type="file"
-                            accept="application/pdf,image/*"
-                            onChange={(event) => {
-                              const file = event.target.files?.[0] ?? null;
-                              setCreateValues((prev) => ({
-                                ...prev,
-                                specDraft: { ...prev.specDraft, file }
-                              }));
-                              resetSubmissionAttempt();
-                            }}
-                          />
-                        </div>
+                        {createValues.specDraft.purchased ? (
+                          <>
+                            <div className="space-y-2">
+                              <label className="text-xs font-semibold text-slate-600">
+                                {locale === "ar" ? "تاريخ الشراء" : "Purchase date"}
+                              </label>
+                              <Input
+                                type="date"
+                                value={createValues.specDraft.purchaseDate}
+                                onChange={(event) => {
+                                  const value = event.target.value;
+                                  setCreateValues((prev) => ({
+                                    ...prev,
+                                    specDraft: { ...prev.specDraft, purchaseDate: value }
+                                  }));
+                                  resetSubmissionAttempt();
+                                }}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-xs font-semibold text-slate-600">
+                                {t("specificationBookMethod")}
+                              </label>
+                              <Input
+                                value={createValues.specDraft.method}
+                                onChange={(event) => {
+                                  const value = event.target.value;
+                                  setCreateValues((prev) => ({
+                                    ...prev,
+                                    specDraft: { ...prev.specDraft, method: value }
+                                  }));
+                                  resetSubmissionAttempt();
+                                }}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-xs font-semibold text-slate-600">
+                                {t("specificationBookCost")}
+                              </label>
+                              <Input
+                                type="number"
+                                value={createValues.specDraft.cost}
+                                onChange={(event) => {
+                                  const value = event.target.value;
+                                  setCreateValues((prev) => ({
+                                    ...prev,
+                                    specDraft: { ...prev.specDraft, cost: value }
+                                  }));
+                                  resetSubmissionAttempt();
+                                }}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-xs font-semibold text-slate-600">
+                                {locale === "ar" ? "العملة" : "Currency"}
+                              </label>
+                              <Input
+                                value={createValues.specDraft.currency}
+                                onChange={(event) => {
+                                  const value = event.target.value;
+                                  setCreateValues((prev) => ({
+                                    ...prev,
+                                    specDraft: { ...prev.specDraft, currency: value }
+                                  }));
+                                  resetSubmissionAttempt();
+                                }}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-xs font-semibold text-slate-600">
+                                {t("specificationBookResponsible")}
+                              </label>
+                              <Input
+                                value={createValues.specDraft.responsible}
+                                onChange={(event) => {
+                                  const value = event.target.value;
+                                  setCreateValues((prev) => ({
+                                    ...prev,
+                                    specDraft: { ...prev.specDraft, responsible: value }
+                                  }));
+                                  resetSubmissionAttempt();
+                                }}
+                              />
+                            </div>
+                            <div className="col-span-full space-y-2">
+                              <label className="text-xs font-semibold text-slate-600">
+                                {t("specificationBookReceipt")}
+                              </label>
+                              <Input
+                                type="file"
+                                accept="application/pdf,image/*"
+                                onChange={(event) => {
+                                  const file = event.target.files?.[0] ?? null;
+                                  setCreateValues((prev) => ({
+                                    ...prev,
+                                    specDraft: { ...prev.specDraft, file }
+                                  }));
+                                  resetSubmissionAttempt();
+                                }}
+                              />
+                            </div>
+                          </>
+                        ) : null}
                         <div className="col-span-full flex justify-end">
                           <Button type="button" onClick={handleAddSpecificationDraft}>
                             {t("addSpecificationBook")}
@@ -2319,24 +2419,26 @@ export function TendersPage() {
                                       {formatDate(book.purchaseDate ?? undefined, locale) ?? t("notAvailable")}
                                     </p>
                                   </div>
-                                  <Badge variant={book.purchaseDate ? "success" : "danger"}>
-                                    {book.purchaseDate
+                                  <Badge variant={book.purchased ? "success" : "danger"}>
+                                    {book.purchased
                                       ? t("specificationBookStatusPurchased")
                                       : t("specificationBookStatusMissing")}
                                   </Badge>
                                 </div>
-                                <div className="mt-2 grid gap-2 text-xs text-slate-500 md:grid-cols-2">
-                                  <span>
-                                    {t("specificationBookCost")}: {formatCurrency(book.cost, book.currency, locale)}
-                                  </span>
-                                  <span>
-                                    {t("specificationBookResponsible")}: {book.responsible}
-                                  </span>
-                                  <span>{t("specificationBookMethod")}: {book.purchaseMethod}</span>
-                                  {book.attachment ? (
-                                    <span>{book.attachment.fileName}</span>
-                                  ) : null}
-                                </div>
+                                {book.purchased ? (
+                                  <div className="mt-2 grid gap-2 text-xs text-slate-500 md:grid-cols-2">
+                                    <span>
+                                      {t("specificationBookCost")}: {formatCurrency(book.cost, book.currency, locale)}
+                                    </span>
+                                    <span>
+                                      {t("specificationBookResponsible")}: {book.responsible}
+                                    </span>
+                                    <span>{t("specificationBookMethod")}: {book.purchaseMethod}</span>
+                                    {book.attachment ? (
+                                      <span>{book.attachment.fileName}</span>
+                                    ) : null}
+                                  </div>
+                                ) : null}
                               </div>
                             ))
                           )}

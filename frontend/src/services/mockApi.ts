@@ -40,14 +40,39 @@ type DatabaseShape = {
 const latency = (min = 200, max = 650) =>
   new Promise((resolve) => setTimeout(resolve, Math.random() * (max - min) + min));
 
+type SpecificationBookInput = Omit<SpecificationBook, "purchased"> & { purchased?: boolean };
+
+const normalizeSpecificationBook = (book: SpecificationBookInput): SpecificationBook => ({
+  ...book,
+  purchased: book.purchased ?? Boolean(book.purchaseDate),
+  purchaseDate: book.purchaseDate ?? null,
+  cost: book.cost ?? 0,
+  currency: book.currency ?? "USD",
+  purchaseMethod: book.purchaseMethod ?? "",
+  responsible: book.responsible ?? "",
+  attachment: book.attachment ?? null
+});
+
+const normalizeSpecificationBooks = (
+  books?: SpecificationBookInput[]
+): SpecificationBook[] => (books ?? []).map(normalizeSpecificationBook);
+
 function loadDatabase(): DatabaseShape {
   const stored = window.localStorage.getItem(STORAGE_KEY);
   if (stored) {
-    return JSON.parse(stored) as DatabaseShape;
+    const parsed = JSON.parse(stored) as DatabaseShape;
+    parsed.tenders = parsed.tenders.map((tender) => ({
+      ...tender,
+      specificationBooks: normalizeSpecificationBooks(tender.specificationBooks)
+    }));
+    return parsed;
   }
 
   const db: DatabaseShape = {
-    tenders: seedTenders,
+    tenders: seedTenders.map((tender) => ({
+      ...tender,
+      specificationBooks: normalizeSpecificationBooks(tender.specificationBooks)
+    })),
     projects: seedProjects,
     suppliers: seedSuppliers,
     invoices: seedInvoices,
@@ -67,7 +92,12 @@ let database = loadDatabase();
 
 window.addEventListener("storage", (event) => {
   if (event.key === STORAGE_KEY && event.newValue) {
-    database = JSON.parse(event.newValue) as DatabaseShape;
+    const parsed = JSON.parse(event.newValue) as DatabaseShape;
+    parsed.tenders = parsed.tenders.map((tender) => ({
+      ...tender,
+      specificationBooks: normalizeSpecificationBooks(tender.specificationBooks)
+    }));
+    database = parsed;
   }
 });
 
@@ -181,7 +211,9 @@ export async function saveTender(
     dueDate: existing?.dueDate ?? tender.dueDate ?? new Date().toISOString(),
     createdAt: existing?.createdAt ?? tender.createdAt ?? new Date().toISOString(),
     siteVisit: mergedSiteVisit,
-    specificationBooks: existing?.specificationBooks ?? tender.specificationBooks ?? [],
+    specificationBooks: normalizeSpecificationBooks(
+      existing?.specificationBooks ?? tender.specificationBooks ?? []
+    ),
     proposals: existing?.proposals ?? tender.proposals ?? {},
     attachments: existing?.attachments ?? tender.attachments ?? [],
     links: existing?.links ?? tender.links ?? [],
@@ -218,7 +250,9 @@ export async function saveTender(
     dueDate: tender.dueDate ?? defaults.dueDate,
     createdAt: tender.createdAt ?? defaults.createdAt,
     siteVisit: mergeSiteVisit(defaults.siteVisit ?? undefined, tender.siteVisit),
-    specificationBooks: tender.specificationBooks ?? defaults.specificationBooks,
+    specificationBooks: normalizeSpecificationBooks(
+      tender.specificationBooks ?? defaults.specificationBooks
+    ),
     proposals: { ...defaults.proposals, ...tender.proposals },
     attachments: tender.attachments ?? defaults.attachments,
     links: tender.links ?? defaults.links,
@@ -308,8 +342,9 @@ export async function updateSpecificationBook(
   }
 
   const tender = database.tenders[tenderIndex];
+  const normalizedBook = normalizeSpecificationBook(book);
   const nextBooks = tender.specificationBooks.map((existing) =>
-    existing.id === book.id ? book : existing
+    existing.id === normalizedBook.id ? normalizedBook : existing
   );
 
   database.tenders[tenderIndex] = {
@@ -317,9 +352,7 @@ export async function updateSpecificationBook(
     specificationBooks: nextBooks,
     alerts: {
       ...tender.alerts,
-      needsSpecificationPurchase: nextBooks.every(
-        (entry) => !entry.purchaseDate || entry.purchaseDate === ""
-      )
+      needsSpecificationPurchase: nextBooks.every((entry) => !entry.purchased)
     }
   };
 
@@ -404,7 +437,7 @@ const tenderExportColumns: Record<
   specification: {
     label: "Specification purchased",
     getValue: (tender) =>
-      tender.specificationBooks.some((book) => book.purchaseDate) ? "Yes" : "No"
+      tender.specificationBooks.some((book) => book.purchased) ? "Yes" : "No"
   },
   siteVisit: {
     label: "Site visit status",
