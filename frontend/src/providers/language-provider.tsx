@@ -59,6 +59,8 @@ export type DictionaryKey =
   | "specificationBookStatusPurchased"
   | "specificationBookStatusMissing"
   | "specificationBookReceipt"
+  | "specificationBookPurchasedQuestion"
+  | "specificationBookPurchaseHint"
   | "addSpecificationBook"
   | "proposals"
   | "technicalProposal"
@@ -152,6 +154,8 @@ const dictionaries: Record<Locale, Dictionary> = {
     specificationBookStatusPurchased: "Purchased",
     specificationBookStatusMissing: "Not purchased",
     specificationBookReceipt: "Receipt",
+    specificationBookPurchasedQuestion: "Was the specification booklet purchased?",
+    specificationBookPurchaseHint: "Enable to enter purchase costs, receipts, and responsible details.",
     addSpecificationBook: "Add booklet",
     proposals: "Proposals",
     technicalProposal: "Technical proposal URL",
@@ -238,6 +242,8 @@ const dictionaries: Record<Locale, Dictionary> = {
     specificationBookStatusPurchased: "تم الشراء",
     specificationBookStatusMissing: "غير مشتراة",
     specificationBookReceipt: "الإيصال",
+    specificationBookPurchasedQuestion: "هل تم شراء كراسة المواصفات؟",
+    specificationBookPurchaseHint: "فعّل هذا الخيار لإدخال التكاليف والإيصالات وبيانات المسؤول.",
     addSpecificationBook: "إضافة كراسة",
     proposals: "العروض",
     technicalProposal: "رابط العرض الفني",

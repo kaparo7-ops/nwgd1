@@ -152,6 +152,7 @@ export const tenders: Tender[] = [
       {
         id: "book-1",
         number: "ITB-2024-017",
+        purchased: true,
         purchaseDate: date(-18),
         cost: 250,
         currency: "USD",
@@ -274,6 +275,7 @@ export const tenders: Tender[] = [
       {
         id: "book-2",
         number: "ITB-2024-221",
+        purchased: false,
         purchaseDate: null,
         cost: 0,
         currency: "EUR",
@@ -372,6 +374,7 @@ export const tenders: Tender[] = [
       {
         id: "book-3",
         number: "RFP-2024-044",
+        purchased: true,
         purchaseDate: date(-80),
         cost: 300,
         currency: "USD",
@@ -382,6 +385,7 @@ export const tenders: Tender[] = [
       {
         id: "book-4",
         number: "RFP-2024-044-LOT2",
+        purchased: true,
         purchaseDate: date(-78),
         cost: 180,
         currency: "USD",
