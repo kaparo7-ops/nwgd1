@@ -49,6 +49,36 @@ const attachments: Attachment[] = [
   }
 ];
 
+const siteVisitPhotos: Attachment[] = [
+  {
+    id: "att-photo-1",
+    fileName: "Clinic_Visit_01.jpg",
+    fileSize: 1843200,
+    uploadedAt: date(-9),
+    uploader: "Salem Haddad",
+    previewUrl: "https://dummyimage.com/600x400/15803d/ffffff&text=Visit+1"
+  },
+  {
+    id: "att-photo-2",
+    fileName: "Clinic_Visit_02.jpg",
+    fileSize: 1761280,
+    uploadedAt: date(-9),
+    uploader: "Salem Haddad",
+    previewUrl: "https://dummyimage.com/600x400/0369a1/ffffff&text=Visit+2"
+  }
+];
+
+const tripoliVisitPhotos: Attachment[] = [
+  {
+    id: "att-photo-3",
+    fileName: "Tripoli_Site_Visit.jpg",
+    fileSize: 2048000,
+    uploadedAt: date(-62),
+    uploader: "Layla Ben Ali",
+    previewUrl: "https://dummyimage.com/600x400/7c3aed/ffffff&text=Tripoli"
+  }
+];
+
 const specificationReceipts: SpecificationBook["attachment"][] = [
   {
     id: "att-spec-1",
@@ -111,10 +141,12 @@ export const tenders: Tender[] = [
     dueDate: date(7),
     createdAt: date(-30),
     siteVisit: {
+      required: true,
+      completed: true,
+      photos: siteVisitPhotos,
       date: date(-10),
       assignee: "Salem Haddad",
-      notes: "Site visit completed with municipality engineer. Photos archived.",
-      completed: true
+      notes: "Site visit completed with municipality engineer. Photos archived."
     },
     specificationBooks: [
       {
@@ -231,10 +263,12 @@ export const tenders: Tender[] = [
     dueDate: date(20),
     createdAt: date(-21),
     siteVisit: {
+      required: true,
+      completed: false,
+      photos: [],
       date: date(5),
       assignee: "Omar Ghat",
-      notes: "Awaiting security clearance to confirm visit schedule.",
-      completed: false
+      notes: "Awaiting security clearance to confirm visit schedule."
     },
     specificationBooks: [
       {
@@ -327,10 +361,12 @@ export const tenders: Tender[] = [
     dueDate: date(-28),
     createdAt: date(-90),
     siteVisit: {
+      required: false,
+      completed: true,
+      photos: tripoliVisitPhotos,
       date: date(-60),
       assignee: "Layla Ben Ali",
-      notes: "Joint inspection with IOM engineer. Guarantee renewal flagged for finance.",
-      completed: true
+      notes: "Joint inspection with IOM engineer. Guarantee renewal flagged for finance."
     },
     specificationBooks: [
       {

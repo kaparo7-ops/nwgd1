@@ -136,10 +136,12 @@ type CreateTenderState = {
   technicalUrl: string;
   financialUrl: string;
   siteVisit: {
+    required: boolean;
+    completed: boolean;
     date: string;
     assignee: string;
     notes: string;
-    completed: boolean;
+    photos: Attachment[];
   };
   attachments: Attachment[];
   specificationBooks: SpecificationBook[];
@@ -275,10 +277,12 @@ const createInitialState = (userName: string): CreateTenderState => ({
   technicalUrl: "",
   financialUrl: "",
   siteVisit: {
+    required: false,
+    completed: false,
     date: "",
-    assignee: userName,
+    assignee: "",
     notes: "",
-    completed: false
+    photos: []
   },
   attachments: [],
   specificationBooks: [],
@@ -480,24 +484,74 @@ function TenderDetailsDrawer({
 
           <div className="mt-6 grid gap-6 lg:grid-cols-2">
             <div className="space-y-4">
-              <div className="rounded-2xl border border-border p-4" title={tender.siteVisit?.notes}>
-                <div className="flex items-center justify-between">
+              <div className="rounded-2xl border border-border p-4">
+                <div className="flex items-center justify-between gap-2">
                   <h3 className="text-sm font-semibold text-slate-700">{t("siteVisit")}</h3>
-                  <Badge variant={tender.siteVisit?.completed ? "success" : "warning"}>
-                    {tender.siteVisit?.completed
-                      ? t("specificationBookStatusPurchased")
-                      : t("siteVisitPending")}
-                  </Badge>
+                  {tender.siteVisit ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant={tender.siteVisit.required ? "info" : "default"}>
+                        {tender.siteVisit.required
+                          ? locale === "ar"
+                            ? "مطلوبة"
+                            : "Required"
+                          : locale === "ar"
+                            ? "اختيارية"
+                            : "Optional"}
+                      </Badge>
+                      <Badge variant={tender.siteVisit.completed ? "success" : "warning"}>
+                        {tender.siteVisit.completed
+                          ? locale === "ar"
+                            ? "مكتملة"
+                            : "Completed"
+                          : locale === "ar"
+                            ? "قيد التنفيذ"
+                            : "Pending"}
+                      </Badge>
+                    </div>
+                  ) : null}
                 </div>
-                <div className="mt-3 space-y-2 text-sm text-slate-600">
-                  <p>{formatDate(tender.siteVisit?.date, locale) ?? t("notAvailable")}</p>
-                  <p>
-                    {t("siteVisitAssignee")} : {tender.siteVisit?.assignee ?? t("notAvailable")}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    {tender.siteVisit?.notes ?? t("siteVisitNotes")}
-                  </p>
-                </div>
+                {tender.siteVisit ? (
+                  <>
+                    <div className="mt-3 space-y-2 text-sm text-slate-600">
+                      <p>{formatDate(tender.siteVisit.date, locale) ?? t("notAvailable")}</p>
+                      <p>
+                        {t("siteVisitAssignee")} : {tender.siteVisit.assignee ?? t("notAvailable")}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {tender.siteVisit.notes ?? t("siteVisitNotes")}
+                      </p>
+                    </div>
+                    <div className="mt-4">
+                      <h4 className="text-xs font-semibold text-slate-600">
+                        {locale === "ar" ? "صور الزيارة" : "Site visit photos"}
+                      </h4>
+                      {tender.siteVisit.photos.length > 0 ? (
+                        <div className="mt-2 space-y-2">
+                          {tender.siteVisit.photos.map((photo) => (
+                            <div
+                              key={photo.id}
+                              className="flex items-center justify-between rounded-2xl border border-border bg-white px-4 py-2"
+                            >
+                              <div>
+                                <p className="text-sm font-medium text-slate-700">{photo.fileName}</p>
+                                <p className="text-xs text-slate-400">
+                                  {(photo.fileSize / 1024 / 1024).toFixed(1)} MB · {photo.uploader}
+                                </p>
+                              </div>
+                              <Badge variant="info">{formatDate(photo.uploadedAt, locale) ?? ""}</Badge>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-xs text-slate-400">
+                          {locale === "ar" ? "لا توجد صور مرفوعة" : "No photos uploaded"}
+                        </p>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <p className="mt-3 text-sm text-slate-500">{t("siteVisitPending")}</p>
+                )}
               </div>
 
               <div className="rounded-2xl border border-border p-4">
@@ -751,6 +805,45 @@ export function TendersPage() {
     [resetSubmissionAttempt, user.name]
   );
 
+  const handleSiteVisitPhotosSelected = useCallback(
+    (files: FileList) => {
+      const newPhotos = Array.from(files).map((file) => createAttachmentFromFile(file, user.name));
+      setCreateValues((prev) => ({
+        ...prev,
+        siteVisit: {
+          ...prev.siteVisit,
+          photos: [...prev.siteVisit.photos, ...newPhotos]
+        }
+      }));
+      resetSubmissionAttempt();
+    },
+    [resetSubmissionAttempt, user.name]
+  );
+
+  const handleSiteVisitRequiredChange = useCallback(
+    (checked: boolean) => {
+      setCreateValues((prev) => ({
+        ...prev,
+        siteVisit: checked
+          ? {
+              ...prev.siteVisit,
+              required: true,
+              assignee: prev.siteVisit.assignee || user.name
+            }
+          : {
+              required: false,
+              completed: false,
+              date: "",
+              assignee: "",
+              notes: "",
+              photos: []
+            }
+      }));
+      resetSubmissionAttempt();
+    },
+    [resetSubmissionAttempt, user.name]
+  );
+
   const handleAddSpecificationDraft = useCallback(() => {
     setCreateValues((prev) => {
       const draft = prev.specDraft;
@@ -870,10 +963,17 @@ export function TendersPage() {
 
     const siteVisitState = createValues.siteVisit;
     const hasSiteVisitDetails =
-      siteVisitState.date || siteVisitState.assignee || siteVisitState.notes || siteVisitState.completed;
+      siteVisitState.required ||
+      siteVisitState.photos.length > 0 ||
+      siteVisitState.completed ||
+      Boolean(siteVisitState.date) ||
+      Boolean(siteVisitState.assignee.trim()) ||
+      Boolean(siteVisitState.notes.trim());
     const siteVisit = hasSiteVisitDetails
       ? {
+          required: siteVisitState.required,
           completed: siteVisitState.completed,
+          photos: siteVisitState.photos,
           date: siteVisitState.date ? new Date(siteVisitState.date).toISOString() : null,
           assignee: siteVisitState.assignee.trim() || undefined,
           notes: siteVisitState.notes.trim() || undefined
@@ -1327,11 +1427,37 @@ export function TendersPage() {
           }
           return (
             <div className="space-y-1" title={visit.notes ?? undefined}>
-
-              <Badge variant={visit.completed ? "success" : "warning"}>
+              <div className="flex flex-wrap items-center gap-1">
+                <Badge variant={visit.required ? "info" : "default"}>
+                  {visit.required
+                    ? locale === "ar"
+                      ? "مطلوبة"
+                      : "Required"
+                    : locale === "ar"
+                      ? "اختيارية"
+                      : "Optional"}
+                </Badge>
+                <Badge variant={visit.completed ? "success" : "warning"}>
+                  {visit.completed
+                    ? locale === "ar"
+                      ? "مكتملة"
+                      : "Completed"
+                    : locale === "ar"
+                      ? "قيد التنفيذ"
+                      : "Pending"}
+                </Badge>
+              </div>
+              <p className="text-xs text-slate-500">
                 {formatDate(visit.date ?? undefined, locale) ?? t("notAvailable")}
-              </Badge>
+              </p>
               <p className="text-xs text-slate-500">{visit.assignee ?? t("siteVisitAssignee")}</p>
+              {visit.photos.length > 0 ? (
+                <p className="text-xs text-slate-400">
+                  {locale === "ar"
+                    ? `${visit.photos.length} ${visit.photos.length === 1 ? "صورة" : "صور"}`
+                    : `${visit.photos.length} photo${visit.photos.length === 1 ? "" : "s"}`}
+                </p>
+              ) : null}
             </div>
           );
         },
@@ -1930,69 +2056,114 @@ export function TendersPage() {
                     id: "siteVisit",
                     label: stepLabels.siteVisit,
                     content: (
-                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                        <div className="space-y-2">
-                          <label className="text-xs font-semibold text-slate-600">{t("siteVisit")}</label>
-                          <Input
-                            type="date"
-                            value={createValues.siteVisit.date}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              setCreateValues((prev) => ({
-                                ...prev,
-                                siteVisit: { ...prev.siteVisit, date: value }
-                              }));
-                              resetSubmissionAttempt();
-                            }}
-                          />
+                      <div className="space-y-4">
+                        <div className="flex flex-col gap-2 rounded-2xl border border-border bg-muted/40 p-4 md:flex-row md:items-center md:justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-700">
+                              {locale === "ar" ? "هل الزيارة الميدانية مطلوبة؟" : "Is a site visit required?"}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              {locale === "ar"
+                                ? "فعّل التتبع لإضافة الموعد والمكلف ورفع الصور الداعمة."
+                                : "Enable tracking to capture the schedule, assignee, and supporting photos."}
+                            </p>
+                          </div>
+                          <label className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={createValues.siteVisit.required}
+                              onChange={(event) => handleSiteVisitRequiredChange(event.target.checked)}
+                              className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                            />
+                            <span className="text-sm font-medium text-slate-700">
+                              {createValues.siteVisit.required
+                                ? locale === "ar"
+                                  ? "مفعّل"
+                                  : "Enabled"
+                                : locale === "ar"
+                                  ? "غير مفعّل"
+                                  : "Disabled"}
+                            </span>
+                          </label>
                         </div>
-                        <div className="space-y-2">
-                          <label className="text-xs font-semibold text-slate-600">{t("siteVisitAssignee")}</label>
-                          <Input
-                            value={createValues.siteVisit.assignee}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              setCreateValues((prev) => ({
-                                ...prev,
-                                siteVisit: { ...prev.siteVisit, assignee: value }
-                              }));
-                              resetSubmissionAttempt();
-                            }}
-                          />
-                        </div>
-                        <div className="col-span-full space-y-2">
-                          <label className="text-xs font-semibold text-slate-600">{t("siteVisitNotes")}</label>
-                          <Textarea
-                            rows={3}
-                            value={createValues.siteVisit.notes}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              setCreateValues((prev) => ({
-                                ...prev,
-                                siteVisit: { ...prev.siteVisit, notes: value }
-                              }));
-                              resetSubmissionAttempt();
-                            }}
-                          />
-                        </div>
-                        <div className="col-span-full flex items-center gap-2 rounded-2xl border border-border bg-muted/40 px-4 py-3">
-                          <input
-                            type="checkbox"
-                            checked={createValues.siteVisit.completed}
-                            onChange={(event) => {
-                              const checked = event.target.checked;
-                              setCreateValues((prev) => ({
-                                ...prev,
-                                siteVisit: { ...prev.siteVisit, completed: checked }
-                              }));
-                              resetSubmissionAttempt();
-                            }}
-                            className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
-                          />
-                          <span className="text-sm font-medium text-slate-700">
-                            {locale === "ar" ? "تمت الزيارة" : "Visit completed"}
-                          </span>
-                        </div>
+                        {createValues.siteVisit.required ? (
+                          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                            <div className="space-y-2">
+                              <label className="text-xs font-semibold text-slate-600">{t("siteVisit")}</label>
+                              <Input
+                                type="date"
+                                value={createValues.siteVisit.date}
+                                onChange={(event) => {
+                                  const value = event.target.value;
+                                  setCreateValues((prev) => ({
+                                    ...prev,
+                                    siteVisit: { ...prev.siteVisit, date: value }
+                                  }));
+                                  resetSubmissionAttempt();
+                                }}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-xs font-semibold text-slate-600">{t("siteVisitAssignee")}</label>
+                              <Input
+                                value={createValues.siteVisit.assignee}
+                                onChange={(event) => {
+                                  const value = event.target.value;
+                                  setCreateValues((prev) => ({
+                                    ...prev,
+                                    siteVisit: { ...prev.siteVisit, assignee: value }
+                                  }));
+                                  resetSubmissionAttempt();
+                                }}
+                              />
+                            </div>
+                            <div className="col-span-full space-y-2">
+                              <label className="text-xs font-semibold text-slate-600">{t("siteVisitNotes")}</label>
+                              <Textarea
+                                rows={3}
+                                value={createValues.siteVisit.notes}
+                                onChange={(event) => {
+                                  const value = event.target.value;
+                                  setCreateValues((prev) => ({
+                                    ...prev,
+                                    siteVisit: { ...prev.siteVisit, notes: value }
+                                  }));
+                                  resetSubmissionAttempt();
+                                }}
+                              />
+                            </div>
+                            <div className="col-span-full flex items-center gap-2 rounded-2xl border border-border bg-muted/40 px-4 py-3">
+                              <input
+                                type="checkbox"
+                                checked={createValues.siteVisit.completed}
+                                onChange={(event) => {
+                                  const checked = event.target.checked;
+                                  setCreateValues((prev) => ({
+                                    ...prev,
+                                    siteVisit: { ...prev.siteVisit, completed: checked }
+                                  }));
+                                  resetSubmissionAttempt();
+                                }}
+                                className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                              />
+                              <span className="text-sm font-medium text-slate-700">
+                                {locale === "ar" ? "تمت الزيارة" : "Visit completed"}
+                              </span>
+                            </div>
+                            <div className="col-span-full">
+                              <FileUploader
+                                attachments={createValues.siteVisit.photos}
+                                onFilesSelected={handleSiteVisitPhotosSelected}
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-slate-500">
+                            {locale === "ar"
+                              ? "اترك هذا القسم مغلقاً إذا لم تكن هناك زيارة ميدانية مطلوبة."
+                              : "Leave this section disabled if no site visit is required."}
+                          </p>
+                        )}
                       </div>
                     )
                   },

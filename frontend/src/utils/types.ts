@@ -14,10 +14,12 @@ export type TenderLink = {
 };
 
 export type TenderSiteVisit = {
+  required: boolean;
+  completed: boolean;
+  photos: Attachment[];
   date?: string | null;
   assignee?: string;
   notes?: string;
-  completed: boolean;
 };
 
 export type SpecificationBook = {

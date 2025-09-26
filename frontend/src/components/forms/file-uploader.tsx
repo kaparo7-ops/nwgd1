@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { Attachment } from "@/utils/types";
 import { Badge } from "@/components/ui/badge";
@@ -10,11 +10,12 @@ type FileUploaderProps = {
 
 export function FileUploader({ attachments, onFilesSelected }: FileUploaderProps) {
   const [isHovering, setHovering] = useState(false);
+  const inputId = useId();
 
   return (
     <div className="space-y-4">
       <label
-        htmlFor="attachment-upload"
+        htmlFor={inputId}
         onDragOver={(event) => {
           event.preventDefault();
           setHovering(true);
@@ -30,7 +31,7 @@ export function FileUploader({ attachments, onFilesSelected }: FileUploaderProps
         className="flex flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed border-border bg-muted/60 p-8 text-center"
       >
         <input
-          id="attachment-upload"
+          id={inputId}
           type="file"
           multiple
           className="hidden"

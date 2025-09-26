@@ -22,6 +22,7 @@ import type {
   Tender,
   TenderActivity,
   TenderPricing,
+  TenderSiteVisit,
   User
 } from "@/utils/types";
 
@@ -111,6 +112,42 @@ const defaultPricing = (currency: string): TenderPricing => ({
   }
 });
 
+const mergeSiteVisit = (
+  existing?: TenderSiteVisit,
+  incoming?: Partial<TenderSiteVisit>
+): TenderSiteVisit | undefined => {
+  if (!existing && !incoming) return undefined;
+
+  const has = (key: keyof TenderSiteVisit) =>
+    incoming ? Object.prototype.hasOwnProperty.call(incoming, key) : false;
+
+  const next: TenderSiteVisit = {
+    required: has("required")
+      ? Boolean(incoming?.required)
+      : existing?.required ?? false,
+    completed: has("completed")
+      ? Boolean(incoming?.completed)
+      : existing?.completed ?? false,
+    photos: incoming?.photos ? [...incoming.photos] : [...(existing?.photos ?? [])],
+    date: has("date") ? incoming?.date ?? null : existing?.date ?? null,
+    assignee: has("assignee") ? incoming?.assignee : existing?.assignee,
+    notes: has("notes") ? incoming?.notes : existing?.notes
+  };
+
+  if (
+    !next.required &&
+    !next.completed &&
+    !next.date &&
+    !next.assignee &&
+    !next.notes &&
+    next.photos.length === 0
+  ) {
+    return undefined;
+  }
+
+  return next;
+};
+
 export async function saveTender(
   tender: Partial<Tender> & { title?: string }
 ): Promise<Tender> {
@@ -124,6 +161,8 @@ export async function saveTender(
   }
 
   const baseCurrency = tender.currency ?? existing?.currency ?? "USD";
+
+  const mergedSiteVisit = mergeSiteVisit(existing?.siteVisit, tender.siteVisit);
 
   const defaults: Tender = {
     id,
@@ -141,7 +180,7 @@ export async function saveTender(
       existing?.submissionDate ?? tender.submissionDate ?? new Date().toISOString(),
     dueDate: existing?.dueDate ?? tender.dueDate ?? new Date().toISOString(),
     createdAt: existing?.createdAt ?? tender.createdAt ?? new Date().toISOString(),
-    siteVisit: existing?.siteVisit ?? tender.siteVisit,
+    siteVisit: mergedSiteVisit,
     specificationBooks: existing?.specificationBooks ?? tender.specificationBooks ?? [],
     proposals: existing?.proposals ?? tender.proposals ?? {},
     attachments: existing?.attachments ?? tender.attachments ?? [],
@@ -178,7 +217,7 @@ export async function saveTender(
     submissionDate: tender.submissionDate ?? defaults.submissionDate,
     dueDate: tender.dueDate ?? defaults.dueDate,
     createdAt: tender.createdAt ?? defaults.createdAt,
-    siteVisit: tender.siteVisit ?? defaults.siteVisit,
+    siteVisit: mergeSiteVisit(defaults.siteVisit ?? undefined, tender.siteVisit),
     specificationBooks: tender.specificationBooks ?? defaults.specificationBooks,
     proposals: { ...defaults.proposals, ...tender.proposals },
     attachments: tender.attachments ?? defaults.attachments,
@@ -213,7 +252,8 @@ export async function saveTender(
 export async function uploadAttachment(
   tenderId: string,
   files: FileList,
-  uploader: string
+  uploader: string,
+  options?: { target?: "attachments" | "siteVisit" }
 ): Promise<Attachment[]> {
   await latency();
   const tender = database.tenders.find((item) => item.id === tenderId);
@@ -232,6 +272,25 @@ export async function uploadAttachment(
         ? URL.createObjectURL(file)
         : undefined
   }));
+
+  if (options?.target === "siteVisit") {
+    const existingVisit: TenderSiteVisit =
+      tender.siteVisit ?? {
+        required: true,
+        completed: false,
+        photos: [],
+        date: null,
+        assignee: uploader
+      };
+    const combinedPhotos = [...uploaded, ...existingVisit.photos];
+    const updatedVisit = mergeSiteVisit(existingVisit, {
+      ...existingVisit,
+      photos: combinedPhotos
+    });
+    tender.siteVisit = updatedVisit;
+    persist(database);
+    return tender.siteVisit?.photos ?? [];
+  }
 
   tender.attachments = [...uploaded, ...tender.attachments];
   persist(database);
@@ -348,8 +407,35 @@ const tenderExportColumns: Record<
       tender.specificationBooks.some((book) => book.purchaseDate) ? "Yes" : "No"
   },
   siteVisit: {
-    label: "Site visit",
+    label: "Site visit status",
+    getValue: (tender, locale) => {
+      if (!tender.siteVisit) {
+        return locale === "ar" ? "لم تُحدد" : "Not scheduled";
+      }
+      const requiredText = tender.siteVisit.required
+        ? locale === "ar"
+          ? "مطلوبة"
+          : "Required"
+        : locale === "ar"
+          ? "اختيارية"
+          : "Optional";
+      const completionText = tender.siteVisit.completed
+        ? locale === "ar"
+          ? "مكتملة"
+          : "Completed"
+        : locale === "ar"
+          ? "قيد التنفيذ"
+          : "Pending";
+      return `${requiredText} | ${completionText}`;
+    }
+  },
+  siteVisitDate: {
+    label: "Site visit date",
     getValue: (tender, locale) => formatDate(tender.siteVisit?.date, locale)
+  },
+  siteVisitAssignee: {
+    label: "Site visit assignee",
+    getValue: (tender) => tender.siteVisit?.assignee ?? ""
   },
   technicalUrl: {
     label: "Technical link",
