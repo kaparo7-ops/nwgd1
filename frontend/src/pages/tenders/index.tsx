@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileUploader } from "@/components/forms/file-uploader";
 import { ModalForm } from "@/components/forms/modal-form";
+import { Tabs } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/providers/auth-provider";
@@ -97,6 +98,52 @@ type TenderFormValues = {
   description: string;
   technicalUrl?: string;
   financialUrl?: string;
+};
+
+type CreateTenderStep =
+  | "basics"
+  | "dates"
+  | "siteVisit"
+  | "attachments"
+  | "specification"
+  | "quote";
+
+type SpecificationDraft = {
+  number: string;
+  purchaseDate: string;
+  method: string;
+  cost: string;
+  currency: string;
+  responsible: string;
+  file: File | null;
+};
+
+type CreateTenderState = {
+  reference: string;
+  nameEn: string;
+  nameAr: string;
+  tenderType: TenderType;
+  agency: string;
+  owner: string;
+  status: TenderStatus;
+  statusReason: string;
+  dueDate: string;
+  submissionDate: string;
+  amount: string;
+  currency: string;
+  tagsText: string;
+  description: string;
+  technicalUrl: string;
+  financialUrl: string;
+  siteVisit: {
+    date: string;
+    assignee: string;
+    notes: string;
+    completed: boolean;
+  };
+  attachments: Attachment[];
+  specificationBooks: SpecificationBook[];
+  specDraft: SpecificationDraft;
 };
 
 const columnOrder = [
@@ -191,6 +238,82 @@ const createAttachmentFromFile = (file: File, uploader: string): Attachment => (
       ? URL.createObjectURL(file)
       : undefined
 });
+
+const createStepOrder: CreateTenderStep[] = [
+  "basics",
+  "dates",
+  "siteVisit",
+  "attachments",
+  "specification",
+  "quote"
+];
+
+const createStepFieldMap: Record<CreateTenderStep, (keyof TenderFormValues)[]> = {
+  basics: ["reference", "agency", "nameEn", "nameAr", "tenderType", "owner", "status", "statusReason", "tags"],
+  dates: ["dueDate", "submissionDate"],
+  siteVisit: [],
+  attachments: [],
+  specification: [],
+  quote: ["amount", "currency", "description", "technicalUrl", "financialUrl"]
+};
+
+const createInitialState = (userName: string): CreateTenderState => ({
+  reference: "",
+  nameEn: "",
+  nameAr: "",
+  tenderType: "RFP",
+  agency: "",
+  owner: "",
+  status: "preparing",
+  statusReason: "",
+  dueDate: "",
+  submissionDate: "",
+  amount: "",
+  currency: "USD",
+  tagsText: "",
+  description: "",
+  technicalUrl: "",
+  financialUrl: "",
+  siteVisit: {
+    date: "",
+    assignee: userName,
+    notes: "",
+    completed: false
+  },
+  attachments: [],
+  specificationBooks: [],
+  specDraft: {
+    number: "",
+    purchaseDate: "",
+    method: "",
+    cost: "",
+    currency: "USD",
+    responsible: userName,
+    file: null
+  }
+});
+
+const stateToFormValues = (state: CreateTenderState): TenderFormValues => {
+  const amountValue = Number(state.amount);
+  return {
+    reference: state.reference,
+    nameEn: state.nameEn,
+    nameAr: state.nameAr,
+    tenderType: state.tenderType,
+    agency: state.agency,
+    owner: state.owner,
+    status: state.status,
+    statusReason: state.statusReason,
+    dueDate: state.dueDate,
+    submissionDate: state.submissionDate,
+    amount: Number.isNaN(amountValue) ? 0 : amountValue,
+    currency: state.currency,
+    tags: parseTags(state.tagsText, []),
+    description: state.description,
+    technicalUrl: state.technicalUrl.trim() || undefined,
+    financialUrl: state.financialUrl.trim() || undefined
+  };
+};
 
 const getDueCategory = (tender: Tender): string => {
   const now = new Date();
@@ -574,6 +697,109 @@ export function TendersPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [createErrors, setCreateErrors] = useState<TenderFormErrors>({});
   const [editErrors, setEditErrors] = useState<Record<string, TenderFormErrors>>({});
+  const [createValues, setCreateValues] = useState<CreateTenderState>(() => createInitialState(user.name));
+  const [activeCreateStep, setActiveCreateStep] = useState<CreateTenderStep>("basics");
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+
+  const clearFieldError = useCallback((field: keyof TenderFormValues) => {
+    setCreateErrors((prev) => {
+      if (!prev[field]) return prev;
+      const { [field]: _removed, ...rest } = prev;
+      return rest;
+    });
+  }, []);
+
+  const runStepValidation = useCallback(
+    (step: CreateTenderStep) => {
+      if (createStepFieldMap[step].length === 0) return;
+      const values = stateToFormValues(createValues);
+      const errors = validateForm(values, locale);
+      setCreateErrors((prev) => {
+        const next = { ...prev } as TenderFormErrors;
+        createStepFieldMap[step].forEach((field) => {
+          if (errors[field]) {
+            next[field] = errors[field] as string;
+          } else {
+            delete next[field];
+          }
+        });
+        return next;
+      });
+    },
+    [createValues, locale]
+  );
+
+  const handleCreateStepChange = useCallback(
+    (stepId: string) => {
+      const step = stepId as CreateTenderStep;
+      if (step === activeCreateStep) return;
+      runStepValidation(activeCreateStep);
+      setActiveCreateStep(step);
+    },
+    [activeCreateStep, runStepValidation]
+  );
+
+  const handleAttachmentsSelected = useCallback(
+    (files: FileList) => {
+      const newAttachments = Array.from(files).map((file) => createAttachmentFromFile(file, user.name));
+      setCreateValues((prev) => ({
+        ...prev,
+        attachments: [...prev.attachments, ...newAttachments]
+      }));
+      resetSubmissionAttempt();
+    },
+    [resetSubmissionAttempt, user.name]
+  );
+
+  const handleAddSpecificationDraft = useCallback(() => {
+    setCreateValues((prev) => {
+      const draft = prev.specDraft;
+      if (!draft.number.trim()) return prev;
+      const costValue = Number(draft.cost);
+      const newBook: SpecificationBook = {
+        id: `book-${crypto.randomUUID()}`,
+        number: draft.number.trim(),
+        purchaseDate: draft.purchaseDate ? new Date(draft.purchaseDate).toISOString() : null,
+        cost: Number.isNaN(costValue) ? 0 : costValue,
+        currency: draft.currency || prev.currency,
+        purchaseMethod: draft.method,
+        responsible: draft.responsible.trim() || user.name,
+        attachment: draft.file ? createAttachmentFromFile(draft.file, user.name) : null
+      };
+      return {
+        ...prev,
+        specificationBooks: [...prev.specificationBooks, newBook],
+        specDraft: {
+          number: "",
+          purchaseDate: "",
+          method: "",
+          cost: "",
+          currency: prev.currency,
+          responsible: draft.responsible.trim() || user.name,
+          file: null
+        }
+      };
+    });
+    resetSubmissionAttempt();
+  }, [resetSubmissionAttempt, user.name]);
+
+  const displayedErrors = useMemo(() => {
+    if (submitAttempted) return createErrors;
+    const stepFields = new Set(createStepFieldMap[activeCreateStep]);
+    const filtered: Partial<Record<keyof TenderFormValues, string>> = {};
+    Object.entries(createErrors).forEach(([key, value]) => {
+      if (stepFields.has(key as keyof TenderFormValues)) {
+        filtered[key as keyof TenderFormValues] = value;
+      }
+    });
+    return filtered;
+  }, [submitAttempted, createErrors, activeCreateStep]);
+
+  const resetSubmissionAttempt = useCallback(() => {
+    if (submitAttempted) {
+      setSubmitAttempted(false);
+    }
+  }, [submitAttempted]);
 
   const defaultVisibility = useMemo(() => {
     const width = typeof window !== "undefined" ? window.innerWidth : 1440;
@@ -624,16 +850,36 @@ export function TendersPage() {
   });
 
   const handleCreateTender = useCallback(() => {
-    const form = document.getElementById("tender-form") as HTMLFormElement | null;
-    if (!form) return;
-    const values = readFormValues(form);
+    const values = stateToFormValues(createValues);
     const errors = validateForm(values, locale);
     setCreateErrors(errors);
-    if (Object.keys(errors).length > 0) return;
+    setSubmitAttempted(true);
+    if (Object.keys(errors).length > 0) {
+      const firstInvalidStep = createStepOrder.find((step) =>
+        createStepFieldMap[step].some((field) => errors[field])
+      );
+      if (firstInvalidStep) {
+        setActiveCreateStep(firstInvalidStep);
+      }
+      return;
+    }
     const dueDate = values.dueDate ? new Date(values.dueDate).toISOString() : new Date().toISOString();
     const submissionDate = values.submissionDate
       ? new Date(values.submissionDate).toISOString()
       : dueDate;
+
+    const siteVisitState = createValues.siteVisit;
+    const hasSiteVisitDetails =
+      siteVisitState.date || siteVisitState.assignee || siteVisitState.notes || siteVisitState.completed;
+    const siteVisit = hasSiteVisitDetails
+      ? {
+          completed: siteVisitState.completed,
+          date: siteVisitState.date ? new Date(siteVisitState.date).toISOString() : null,
+          assignee: siteVisitState.assignee.trim() || undefined,
+          notes: siteVisitState.notes.trim() || undefined
+        }
+      : undefined;
+
     saveMutation.mutate({
       title: combineTitle({ en: values.nameEn, ar: values.nameAr }),
       reference: values.reference,
@@ -648,37 +894,38 @@ export function TendersPage() {
       dueDate,
       submissionDate,
       description: values.description,
-
+      siteVisit,
       timeline: [
         {
           id: `activity-${crypto.randomUUID()}`,
           date: new Date().toISOString(),
           actor: user.name,
           description: locale === "ar" ? "تم إنشاء المناقصة" : "Tender created",
-
           category: "status"
         }
       ],
       alerts: {
         submissionReminderAt: dueDate,
-        needsSpecificationPurchase: true,
+        needsSpecificationPurchase: createValues.specificationBooks.every((book) => !book.purchaseDate),
         siteVisitOverdue: false,
         guaranteeAlert: null
       },
-      specificationBooks: [],
+      specificationBooks: createValues.specificationBooks,
       proposals: {
         technicalUrl: values.technicalUrl,
         financialUrl: values.financialUrl,
         submittedBy: user.name,
         submittedAt: new Date().toISOString()
       },
-      attachments: [],
+      attachments: createValues.attachments,
       links: []
     });
-    form.reset();
-    setCreateErrors({});
 
-  }, [locale, saveMutation, user.name]);
+    setCreateValues(createInitialState(user.name));
+    setCreateErrors({});
+    setActiveCreateStep("basics");
+    setSubmitAttempted(false);
+  }, [createValues, locale, saveMutation, user.name]);
 
   const handleEditTender = useCallback(
     (formId: string, tender: Tender) => {
@@ -1425,6 +1672,18 @@ export function TendersPage() {
     [locale]
   );
 
+  const stepLabels = useMemo(
+    () => ({
+      basics: locale === "ar" ? "الأساسيات" : "Basics",
+      dates: locale === "ar" ? "التواريخ" : "Dates",
+      siteVisit: locale === "ar" ? "الزيارة الميدانية" : "Site Visit",
+      attachments: locale === "ar" ? "المرفقات" : "Attachments",
+      specification: locale === "ar" ? "كراسة المواصفات" : "Specification Book",
+      quote: locale === "ar" ? "نموذج التسعير" : "Quote Template"
+    }),
+    [locale]
+  );
+
   const handleRowClick = (row: Tender) => {
     setSelectedTender(row);
     setDrawerOpen(true);
@@ -1447,184 +1706,550 @@ export function TendersPage() {
             trigger={<Button>{t("addNew")}</Button>}
             onSubmit={handleCreateTender}
           >
-            <form id="tender-form" className="space-y-6">
-              <section className="space-y-3">
-                <h3 className="text-sm font-semibold text-slate-700">
-                  {locale === "ar" ? "الأساسيات" : "Basics"}
-                </h3>
-                <div className="grid grid-cols-12 gap-3">
-                  <div className="col-span-12 md:col-span-6">
-                    <label className="block text-xs font-semibold text-slate-600">
-                      {t("reference")} *
-                    </label>
-                    <Input name="reference" required />
-                    {createErrors.reference ? (
-                      <p className="text-xs text-red-500">{createErrors.reference}</p>
-                    ) : null}
-                  </div>
-                  <div className="col-span-12 md:col-span-6">
-                    <label className="block text-xs font-semibold text-slate-600">
-                      {locale === "ar" ? "الجهة" : "Agency"} *
-                    </label>
-                    <Input name="agency" required />
-                    {createErrors.agency ? (
-                      <p className="text-xs text-red-500">{createErrors.agency}</p>
-                    ) : null}
-                  </div>
-                  <div className="col-span-12 md:col-span-6">
-                    <label className="block text-xs font-semibold text-slate-600">
-                      {locale === "ar" ? "الاسم (En)" : "Name (En)"} *
-                    </label>
-                    <Input name="nameEn" />
-                    {createErrors.nameEn ? (
-                      <p className="text-xs text-red-500">{createErrors.nameEn}</p>
-                    ) : (
-                      <p className="text-xs text-slate-400">
-                        {locale === "ar"
-                          ? "أدخل الاسم بالإنجليزية وسيتم دمجه مع العربية"
-                          : "Provide the English title to pair with Arabic."}
-                      </p>
-                    )}
-                  </div>
-                  <div className="col-span-12 md:col-span-6">
-                    <label className="block text-xs font-semibold text-slate-600">
-                      {locale === "ar" ? "الاسم (ع)" : "Name (Ar)"}
-                    </label>
-                    <Input name="nameAr" dir="rtl" />
-                  </div>
-                  <div className="col-span-12 md:col-span-4">
-                    <label className="block text-xs font-semibold text-slate-600">
-                      {t("tenderType")}
-                    </label>
-                    <select
-                      name="tenderType"
-                      defaultValue="RFP"
-                      className="h-11 w-full rounded-2xl border border-border bg-white px-4 text-sm"
-                    >
-                      {tenderTypeOptions.map((type) => (
-                        <option key={type} value={type}>
-                          {typeLabels[locale][type]}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="col-span-12 md:col-span-4">
-                    <label className="block text-xs font-semibold text-slate-600">
-                      {t("owner")}
-                    </label>
-                    <Input name="owner" />
-                    {createErrors.owner ? (
-                      <p className="text-xs text-red-500">{createErrors.owner}</p>
-                    ) : null}
-                  </div>
-                  <div className="col-span-12 md:col-span-4">
-                    <label className="block text-xs font-semibold text-slate-600">
-                      {t("status")}
-                    </label>
-                    <select
-                      name="status"
-                      defaultValue="preparing"
-                      className="h-11 w-full rounded-2xl border border-border bg-white px-4 text-sm"
-                    >
-                      {statusOptions.map((status) => (
-                        <option key={status} value={status}>
-                          {statusLabels[locale][status]}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </section>
-              <section className="space-y-3">
-                <h3 className="text-sm font-semibold text-slate-700">
-                  {locale === "ar" ? "التواريخ" : "Dates"}
-                </h3>
-                <div className="grid grid-cols-12 gap-3">
-                  <div className="col-span-12 md:col-span-6">
-                    <label className="block text-xs font-semibold text-slate-600">
-                      {t("dueDate")} *
-                    </label>
-                    <Input name="dueDate" type="date" />
-                    {createErrors.dueDate ? (
-                      <p className="text-xs text-red-500">{createErrors.dueDate}</p>
-                    ) : null}
-                  </div>
-                  <div className="col-span-12 md:col-span-6">
-                    <label className="block text-xs font-semibold text-slate-600">
-                      {t("submissionDate")} *
-                    </label>
-                    <Input name="submissionDate" type="date" />
-                    {createErrors.submissionDate ? (
-                      <p className="text-xs text-red-500">{createErrors.submissionDate}</p>
-                    ) : null}
-                  </div>
-                </div>
-              </section>
-              <section className="space-y-3">
-                <h3 className="text-sm font-semibold text-slate-700">
-                  {locale === "ar" ? "القيمة" : "Value"}
-                </h3>
-                <div className="grid grid-cols-12 gap-3">
-                  <div className="col-span-12 md:col-span-6 lg:col-span-4">
-                    <label className="block text-xs font-semibold text-slate-600">
-                      {t("offerValue")}
-                    </label>
-                    <Input name="amount" type="number" />
-                    {createErrors.amount ? (
-                      <p className="text-xs text-red-500">{createErrors.amount}</p>
-                    ) : null}
-                  </div>
-                  <div className="col-span-12 md:col-span-6 lg:col-span-4">
-                    <label className="block text-xs font-semibold text-slate-600">
-                      {locale === "ar" ? "العملة" : "Currency"}
-                    </label>
-                    <Input name="currency" defaultValue="USD" />
-                  </div>
-                </div>
-              </section>
-              <section className="space-y-3">
-                <h3 className="text-sm font-semibold text-slate-700">
-                  {locale === "ar" ? "الملفات والروابط" : "Files & links"}
-                </h3>
-                <Input
-                  name="technicalUrl"
-                  placeholder={locale === "ar" ? "رابط العرض الفني" : "Technical offer link"}
-                />
-                <Input
-                  name="financialUrl"
-                  placeholder={locale === "ar" ? "رابط العرض المالي" : "Financial offer link"}
-                />
-              </section>
-              <section className="space-y-3">
-                <h3 className="text-sm font-semibold text-slate-700">
-                  {t("notes")}
-                </h3>
-                <Textarea name="description" rows={3} />
-                <div className="grid grid-cols-12 gap-3">
-                  <div className="col-span-12 md:col-span-6">
-                    <label className="block text-xs font-semibold text-slate-600">
-                      {t("tags")}
-                    </label>
-                    <Input name="tags" placeholder={t("tagsPlaceholder")} />
-                  </div>
-                  <div className="col-span-12 md:col-span-6">
-                    <label className="block text-xs font-semibold text-slate-600">
-                      {t("statusReason")}
-                    </label>
-                    <Textarea name="statusReason" rows={2} />
-                    {createErrors.statusReason ? (
-                      <p className="text-xs text-red-500">{createErrors.statusReason}</p>
-                    ) : (
-                      <p className="text-xs text-slate-400">
-                        {locale === "ar"
-                          ? "سبب الحالة إلزامي عند تحديد خسارة أو إلغاء"
-                          : "Required when status is Lost or Cancelled."}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </section>
-
+            <form
+              id="tender-form"
+              className="flex h-full flex-col"
+              onSubmit={(event) => event.preventDefault()}
+            >
+              <Tabs
+                value={activeCreateStep}
+                onValueChange={handleCreateStepChange}
+                tabs={[
+                  {
+                    id: "basics",
+                    label: stepLabels.basics,
+                    content: (
+                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold text-slate-600">
+                            {t("reference")} *
+                          </label>
+                          <Input
+                            value={createValues.reference}
+                            onChange={(event) => {
+                              setCreateValues((prev) => ({ ...prev, reference: event.target.value }));
+                              clearFieldError("reference");
+                              resetSubmissionAttempt();
+                            }}
+                          />
+                          {displayedErrors.reference ? (
+                            <p className="text-xs text-red-500">{displayedErrors.reference}</p>
+                          ) : null}
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold text-slate-600">
+                            {locale === "ar" ? "الجهة" : "Agency"} *
+                          </label>
+                          <Input
+                            value={createValues.agency}
+                            onChange={(event) => {
+                              setCreateValues((prev) => ({ ...prev, agency: event.target.value }));
+                              clearFieldError("agency");
+                              resetSubmissionAttempt();
+                            }}
+                          />
+                          {displayedErrors.agency ? (
+                            <p className="text-xs text-red-500">{displayedErrors.agency}</p>
+                          ) : null}
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold text-slate-600">
+                            {locale === "ar" ? "الاسم (En)" : "Name (En)"} *
+                          </label>
+                          <Input
+                            value={createValues.nameEn}
+                            onChange={(event) => {
+                              setCreateValues((prev) => ({ ...prev, nameEn: event.target.value }));
+                              clearFieldError("nameEn");
+                              resetSubmissionAttempt();
+                            }}
+                          />
+                          {displayedErrors.nameEn ? (
+                            <p className="text-xs text-red-500">{displayedErrors.nameEn}</p>
+                          ) : (
+                            <p className="text-xs text-slate-400">
+                              {locale === "ar"
+                                ? "أدخل الاسم بالإنجليزية وسيتم دمجه مع العربية"
+                                : "Provide the English title to pair with Arabic."}
+                            </p>
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold text-slate-600">
+                            {locale === "ar" ? "الاسم (ع)" : "Name (Ar)"}
+                          </label>
+                          <Input
+                            value={createValues.nameAr}
+                            dir="rtl"
+                            onChange={(event) => {
+                              setCreateValues((prev) => ({ ...prev, nameAr: event.target.value }));
+                              clearFieldError("nameAr");
+                              clearFieldError("nameEn");
+                              resetSubmissionAttempt();
+                            }}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold text-slate-600">
+                            {t("tenderType")}
+                          </label>
+                          <select
+                            value={createValues.tenderType}
+                            onChange={(event) => {
+                              setCreateValues((prev) => ({
+                                ...prev,
+                                tenderType: event.target.value as TenderType
+                              }));
+                              clearFieldError("tenderType");
+                              resetSubmissionAttempt();
+                            }}
+                            className="h-11 w-full rounded-2xl border border-border bg-white px-4 text-sm"
+                          >
+                            {tenderTypeOptions.map((type) => (
+                              <option key={type} value={type}>
+                                {typeLabels[locale][type]}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold text-slate-600">{t("owner")}</label>
+                          <Input
+                            value={createValues.owner}
+                            onChange={(event) => {
+                              setCreateValues((prev) => ({ ...prev, owner: event.target.value }));
+                              clearFieldError("owner");
+                              resetSubmissionAttempt();
+                            }}
+                          />
+                          {displayedErrors.owner ? (
+                            <p className="text-xs text-red-500">{displayedErrors.owner}</p>
+                          ) : null}
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold text-slate-600">{t("status")}</label>
+                          <select
+                            value={createValues.status}
+                            onChange={(event) => {
+                              const nextStatus = event.target.value as TenderStatus;
+                              setCreateValues((prev) => ({ ...prev, status: nextStatus }));
+                              clearFieldError("status");
+                              if (nextStatus !== "lost" && nextStatus !== "cancelled") {
+                                clearFieldError("statusReason");
+                              }
+                              resetSubmissionAttempt();
+                            }}
+                            className="h-11 w-full rounded-2xl border border-border bg-white px-4 text-sm"
+                          >
+                            {statusOptions.map((status) => (
+                              <option key={status} value={status}>
+                                {statusLabels[locale][status]}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="col-span-full space-y-2">
+                          <label className="text-xs font-semibold text-slate-600">{t("statusReason")}</label>
+                          <Textarea
+                            rows={2}
+                            value={createValues.statusReason}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              setCreateValues((prev) => ({ ...prev, statusReason: value }));
+                              clearFieldError("statusReason");
+                              resetSubmissionAttempt();
+                            }}
+                          />
+                          {displayedErrors.statusReason ? (
+                            <p className="text-xs text-red-500">{displayedErrors.statusReason}</p>
+                          ) : (
+                            <p className="text-xs text-slate-400">
+                              {locale === "ar"
+                                ? "سبب الحالة إلزامي عند تحديد خسارة أو إلغاء"
+                                : "Required when status is Lost or Cancelled."}
+                            </p>
+                          )}
+                        </div>
+                        <div className="col-span-full space-y-2">
+                          <label className="text-xs font-semibold text-slate-600">{t("tags")}</label>
+                          <Input
+                            value={createValues.tagsText}
+                            placeholder={t("tagsPlaceholder")}
+                            onChange={(event) => {
+                              setCreateValues((prev) => ({ ...prev, tagsText: event.target.value }));
+                              resetSubmissionAttempt();
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )
+                  },
+                  {
+                    id: "dates",
+                    label: stepLabels.dates,
+                    content: (
+                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold text-slate-600">
+                            {t("dueDate")} *
+                          </label>
+                          <Input
+                            type="date"
+                            value={createValues.dueDate}
+                            onChange={(event) => {
+                              setCreateValues((prev) => ({ ...prev, dueDate: event.target.value }));
+                              clearFieldError("dueDate");
+                              resetSubmissionAttempt();
+                            }}
+                          />
+                          {displayedErrors.dueDate ? (
+                            <p className="text-xs text-red-500">{displayedErrors.dueDate}</p>
+                          ) : null}
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold text-slate-600">
+                            {t("submissionDate")} *
+                          </label>
+                          <Input
+                            type="date"
+                            value={createValues.submissionDate}
+                            onChange={(event) => {
+                              setCreateValues((prev) => ({ ...prev, submissionDate: event.target.value }));
+                              clearFieldError("submissionDate");
+                              resetSubmissionAttempt();
+                            }}
+                          />
+                          {displayedErrors.submissionDate ? (
+                            <p className="text-xs text-red-500">{displayedErrors.submissionDate}</p>
+                          ) : null}
+                        </div>
+                      </div>
+                    )
+                  },
+                  {
+                    id: "siteVisit",
+                    label: stepLabels.siteVisit,
+                    content: (
+                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold text-slate-600">{t("siteVisit")}</label>
+                          <Input
+                            type="date"
+                            value={createValues.siteVisit.date}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              setCreateValues((prev) => ({
+                                ...prev,
+                                siteVisit: { ...prev.siteVisit, date: value }
+                              }));
+                              resetSubmissionAttempt();
+                            }}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold text-slate-600">{t("siteVisitAssignee")}</label>
+                          <Input
+                            value={createValues.siteVisit.assignee}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              setCreateValues((prev) => ({
+                                ...prev,
+                                siteVisit: { ...prev.siteVisit, assignee: value }
+                              }));
+                              resetSubmissionAttempt();
+                            }}
+                          />
+                        </div>
+                        <div className="col-span-full space-y-2">
+                          <label className="text-xs font-semibold text-slate-600">{t("siteVisitNotes")}</label>
+                          <Textarea
+                            rows={3}
+                            value={createValues.siteVisit.notes}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              setCreateValues((prev) => ({
+                                ...prev,
+                                siteVisit: { ...prev.siteVisit, notes: value }
+                              }));
+                              resetSubmissionAttempt();
+                            }}
+                          />
+                        </div>
+                        <div className="col-span-full flex items-center gap-2 rounded-2xl border border-border bg-muted/40 px-4 py-3">
+                          <input
+                            type="checkbox"
+                            checked={createValues.siteVisit.completed}
+                            onChange={(event) => {
+                              const checked = event.target.checked;
+                              setCreateValues((prev) => ({
+                                ...prev,
+                                siteVisit: { ...prev.siteVisit, completed: checked }
+                              }));
+                              resetSubmissionAttempt();
+                            }}
+                            className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                          />
+                          <span className="text-sm font-medium text-slate-700">
+                            {locale === "ar" ? "تمت الزيارة" : "Visit completed"}
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  },
+                  {
+                    id: "attachments",
+                    label: stepLabels.attachments,
+                    content: (
+                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        <div className="col-span-full">
+                          <FileUploader
+                            attachments={createValues.attachments}
+                            onFilesSelected={handleAttachmentsSelected}
+                          />
+                        </div>
+                      </div>
+                    )
+                  },
+                  {
+                    id: "specification",
+                    label: stepLabels.specification,
+                    content: (
+                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold text-slate-600">
+                            {t("specificationBookNumber")}
+                          </label>
+                          <Input
+                            value={createValues.specDraft.number}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              setCreateValues((prev) => ({
+                                ...prev,
+                                specDraft: { ...prev.specDraft, number: value }
+                              }));
+                              resetSubmissionAttempt();
+                            }}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold text-slate-600">
+                            {locale === "ar" ? "تاريخ الشراء" : "Purchase date"}
+                          </label>
+                          <Input
+                            type="date"
+                            value={createValues.specDraft.purchaseDate}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              setCreateValues((prev) => ({
+                                ...prev,
+                                specDraft: { ...prev.specDraft, purchaseDate: value }
+                              }));
+                              resetSubmissionAttempt();
+                            }}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold text-slate-600">
+                            {t("specificationBookMethod")}
+                          </label>
+                          <Input
+                            value={createValues.specDraft.method}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              setCreateValues((prev) => ({
+                                ...prev,
+                                specDraft: { ...prev.specDraft, method: value }
+                              }));
+                              resetSubmissionAttempt();
+                            }}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold text-slate-600">
+                            {t("specificationBookCost")}
+                          </label>
+                          <Input
+                            type="number"
+                            value={createValues.specDraft.cost}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              setCreateValues((prev) => ({
+                                ...prev,
+                                specDraft: { ...prev.specDraft, cost: value }
+                              }));
+                              resetSubmissionAttempt();
+                            }}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold text-slate-600">
+                            {locale === "ar" ? "العملة" : "Currency"}
+                          </label>
+                          <Input
+                            value={createValues.specDraft.currency}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              setCreateValues((prev) => ({
+                                ...prev,
+                                specDraft: { ...prev.specDraft, currency: value }
+                              }));
+                              resetSubmissionAttempt();
+                            }}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold text-slate-600">
+                            {t("specificationBookResponsible")}
+                          </label>
+                          <Input
+                            value={createValues.specDraft.responsible}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              setCreateValues((prev) => ({
+                                ...prev,
+                                specDraft: { ...prev.specDraft, responsible: value }
+                              }));
+                              resetSubmissionAttempt();
+                            }}
+                          />
+                        </div>
+                        <div className="col-span-full space-y-2">
+                          <label className="text-xs font-semibold text-slate-600">
+                            {t("specificationBookReceipt")}
+                          </label>
+                          <Input
+                            type="file"
+                            accept="application/pdf,image/*"
+                            onChange={(event) => {
+                              const file = event.target.files?.[0] ?? null;
+                              setCreateValues((prev) => ({
+                                ...prev,
+                                specDraft: { ...prev.specDraft, file }
+                              }));
+                              resetSubmissionAttempt();
+                            }}
+                          />
+                        </div>
+                        <div className="col-span-full flex justify-end">
+                          <Button type="button" onClick={handleAddSpecificationDraft}>
+                            {t("addSpecificationBook")}
+                          </Button>
+                        </div>
+                        <div className="col-span-full space-y-3">
+                          {createValues.specificationBooks.length === 0 ? (
+                            <p className="text-xs text-slate-500">{t("specificationBookStatusMissing")}</p>
+                          ) : (
+                            createValues.specificationBooks.map((book) => (
+                              <div key={book.id} className="rounded-2xl border border-dashed border-border p-3">
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <p className="text-sm font-semibold text-slate-800">{book.number}</p>
+                                    <p className="text-xs text-slate-500">
+                                      {formatDate(book.purchaseDate ?? undefined, locale) ?? t("notAvailable")}
+                                    </p>
+                                  </div>
+                                  <Badge variant={book.purchaseDate ? "success" : "danger"}>
+                                    {book.purchaseDate
+                                      ? t("specificationBookStatusPurchased")
+                                      : t("specificationBookStatusMissing")}
+                                  </Badge>
+                                </div>
+                                <div className="mt-2 grid gap-2 text-xs text-slate-500 md:grid-cols-2">
+                                  <span>
+                                    {t("specificationBookCost")}: {formatCurrency(book.cost, book.currency, locale)}
+                                  </span>
+                                  <span>
+                                    {t("specificationBookResponsible")}: {book.responsible}
+                                  </span>
+                                  <span>{t("specificationBookMethod")}: {book.purchaseMethod}</span>
+                                  {book.attachment ? (
+                                    <span>{book.attachment.fileName}</span>
+                                  ) : null}
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )
+                  },
+                  {
+                    id: "quote",
+                    label: stepLabels.quote,
+                    content: (
+                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold text-slate-600">{t("offerValue")}</label>
+                          <Input
+                            type="number"
+                            value={createValues.amount}
+                            onChange={(event) => {
+                              setCreateValues((prev) => ({ ...prev, amount: event.target.value }));
+                              clearFieldError("amount");
+                              resetSubmissionAttempt();
+                            }}
+                          />
+                          {displayedErrors.amount ? (
+                            <p className="text-xs text-red-500">{displayedErrors.amount}</p>
+                          ) : null}
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold text-slate-600">
+                            {locale === "ar" ? "العملة" : "Currency"}
+                          </label>
+                          <Input
+                            value={createValues.currency}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              setCreateValues((prev) => ({
+                                ...prev,
+                                currency: value,
+                                specDraft: { ...prev.specDraft, currency: value }
+                              }));
+                              clearFieldError("currency");
+                              resetSubmissionAttempt();
+                            }}
+                          />
+                        </div>
+                        <div className="col-span-full space-y-2">
+                          <Input
+                            value={createValues.technicalUrl}
+                            placeholder={locale === "ar" ? "رابط العرض الفني" : "Technical offer link"}
+                            onChange={(event) => {
+                              setCreateValues((prev) => ({ ...prev, technicalUrl: event.target.value }));
+                              clearFieldError("technicalUrl");
+                              resetSubmissionAttempt();
+                            }}
+                          />
+                        </div>
+                        <div className="col-span-full space-y-2">
+                          <Input
+                            value={createValues.financialUrl}
+                            placeholder={locale === "ar" ? "رابط العرض المالي" : "Financial offer link"}
+                            onChange={(event) => {
+                              setCreateValues((prev) => ({ ...prev, financialUrl: event.target.value }));
+                              clearFieldError("financialUrl");
+                              resetSubmissionAttempt();
+                            }}
+                          />
+                        </div>
+                        <div className="col-span-full space-y-2">
+                          <label className="text-xs font-semibold text-slate-600">{t("notes")}</label>
+                          <Textarea
+                            rows={3}
+                            value={createValues.description}
+                            onChange={(event) => {
+                              setCreateValues((prev) => ({ ...prev, description: event.target.value }));
+                              clearFieldError("description");
+                              resetSubmissionAttempt();
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )
+                  }
+                ]}
+              />
             </form>
           </ModalForm>
         ) : null}
