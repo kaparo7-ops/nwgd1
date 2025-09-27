@@ -9,14 +9,14 @@ type CryptoContainer = {
   msCrypto?: Crypto | null | undefined;
 };
 
-const resolveCrypto = (scope: CryptoContainer | undefined): Crypto | undefined => {
+function resolveCrypto(scope: CryptoContainer | undefined): Crypto | undefined {
   if (!scope) {
     return undefined;
   }
 
   const candidate = scope.crypto ?? scope.msCrypto;
   return typeof candidate === "object" && candidate !== null ? candidate : undefined;
-};
+}
 
 function collectCryptoCandidates(): Crypto[] {
   const candidates: Crypto[] = [];
@@ -47,7 +47,10 @@ function collectCryptoCandidates(): Crypto[] {
   return candidates;
 }
 
-const getCrypto = (): Crypto | undefined => collectCryptoCandidates()[0];
+function getCrypto(): Crypto | undefined {
+  return collectCryptoCandidates()[0];
+}
+
 
 function fallbackWithCrypto(crypto: Crypto): string {
   const bytes = new Uint8Array(16);
