@@ -228,19 +228,21 @@ export async function getTender(id: string): Promise<Tender | undefined> {
   return database.tenders.find((tender) => tender.id === id);
 }
 
-const createEmptySummary = (): TenderPricingSummary => ({
-  subtotalUsd: 0,
-  subtotalLyd: 0,
-  marginUsd: 0,
-  marginLyd: 0,
-  shippingUsd: 0,
-  shippingLyd: 0,
-  totalUsd: 0,
-  totalLyd: 0,
-  fxMissing: false
-});
+function createEmptySummary(): TenderPricingSummary {
+  return {
+    subtotalUsd: 0,
+    subtotalLyd: 0,
+    marginUsd: 0,
+    marginLyd: 0,
+    shippingUsd: 0,
+    shippingLyd: 0,
+    totalUsd: 0,
+    totalLyd: 0,
+    fxMissing: false
+  } satisfies TenderPricingSummary;
+}
 
-const summarizePricing = (lines: TenderPricingLine[]): TenderPricingSummary => {
+function summarizePricing(lines: TenderPricingLine[]): TenderPricingSummary {
   const sum = (key: keyof TenderPricingLine) =>
     lines.reduce((acc, line) => acc + (typeof line[key] === "number" ? (line[key] as number) : 0), 0);
 
@@ -255,14 +257,18 @@ const summarizePricing = (lines: TenderPricingLine[]): TenderPricingSummary => {
     totalLyd: sum("totalLyd"),
     fxMissing: lines.some((line) => line.fxRate === null)
   } satisfies TenderPricingSummary;
-};
+}
 
-const defaultPricing = (): TenderPricing => ({
-  lines: [],
-  summary: createEmptySummary()
-});
+function defaultPricing(): TenderPricing {
+  return {
+    lines: [],
+    summary: createEmptySummary()
+  };
+}
 
-const normalizePricingLine = (line: Partial<TenderPricingLine> & { id: string; item: string }): TenderPricingLine => {
+function normalizePricingLine(
+  line: Partial<TenderPricingLine> & { id: string; item: string }
+): TenderPricingLine {
   if (typeof line.unitCostUsd === "number" && typeof line.subtotalUsd === "number") {
     const normalized: TenderPricingLine = {
       id: line.id,
@@ -313,9 +319,9 @@ const normalizePricingLine = (line: Partial<TenderPricingLine> & { id: string; i
     totalLyd: 0,
     supplier: line.supplier
   };
-};
+}
 
-const normalizePricing = (pricing?: Partial<TenderPricing> & { lines?: any[] }): TenderPricing => {
+function normalizePricing(pricing?: Partial<TenderPricing> & { lines?: any[] }): TenderPricing {
   if (!pricing) {
     return defaultPricing();
   }
@@ -332,9 +338,9 @@ const normalizePricing = (pricing?: Partial<TenderPricing> & { lines?: any[] }):
     lines,
     summary: summarizePricing(lines)
   };
-};
+}
 
-const mergePricing = (existing: TenderPricing, incoming?: Partial<TenderPricing>): TenderPricing => {
+function mergePricing(existing: TenderPricing, incoming?: Partial<TenderPricing>): TenderPricing {
   if (!incoming) {
     return existing;
   }
@@ -344,7 +350,7 @@ const mergePricing = (existing: TenderPricing, incoming?: Partial<TenderPricing>
     lines,
     summary: summarizePricing(lines)
   };
-};
+}
 
 const mergeSiteVisit = (
   existing?: TenderSiteVisit,
