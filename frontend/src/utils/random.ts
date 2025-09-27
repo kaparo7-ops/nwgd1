@@ -18,7 +18,7 @@ const resolveCrypto = (scope: CryptoContainer | undefined): Crypto | undefined =
   return typeof candidate === "object" && candidate !== null ? candidate : undefined;
 };
 
-const collectCryptoCandidates = (): Crypto[] => {
+function collectCryptoCandidates(): Crypto[] {
   const candidates: Crypto[] = [];
   const seen = new Set<Crypto>();
   const addCandidate = (scope: CryptoContainer | undefined): void => {
@@ -45,11 +45,11 @@ const collectCryptoCandidates = (): Crypto[] => {
   addCandidate(typeof global !== "undefined" ? (global as CryptoContainer) : undefined);
 
   return candidates;
-};
+}
 
 const getCrypto = (): Crypto | undefined => collectCryptoCandidates()[0];
 
-const fallbackWithCrypto = (crypto: Crypto): string => {
+function fallbackWithCrypto(crypto: Crypto): string {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
 
@@ -79,9 +79,9 @@ const fallbackWithCrypto = (crypto: Crypto): string => {
     HEX[bytes[14]] +
     HEX[bytes[15]]
   );
-};
+}
 
-const fallbackWithMathRandom = (): string => {
+function fallbackWithMathRandom(): string {
   let timestamp = Date.now();
   let performanceTime =
     typeof performance !== "undefined" && typeof performance.now === "function"
@@ -105,7 +105,7 @@ const fallbackWithMathRandom = (): string => {
 
     return ((randomValue & 0x3) | 0x8).toString(16);
   });
-};
+}
 
 /**
  * Generate a RFC 4122 version 4 UUID, even in environments where
