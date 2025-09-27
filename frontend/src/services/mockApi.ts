@@ -199,77 +199,6 @@ const normalizeTenderRecord = (tender: Tender): Tender => {
   return { ...normalized, aiInsights: ensureAiInsights(normalized) };
 };
 
-function loadDatabase(): DatabaseShape {
-  const stored = window.localStorage.getItem(STORAGE_KEY);
-  if (stored) {
-    const parsed = JSON.parse(stored) as Partial<DatabaseShape>;
-    let migrated = false;
-
-    const storedTenders = Array.isArray(parsed.tenders) ? parsed.tenders : undefined;
-    const tendersSource = storedTenders ?? seedTenders;
-    if (!storedTenders) {
-      migrated = true;
-    }
-
-    const tenders = tendersSource.map((tender) => {
-      const normalized = normalizeTenderRecord(tender as Tender);
-      if (!migrated && JSON.stringify(tender) !== JSON.stringify(normalized)) {
-        migrated = true;
-      }
-      return normalized;
-    });
-
-    const projects = Array.isArray(parsed.projects) ? parsed.projects : seedProjects;
-    const suppliers = Array.isArray(parsed.suppliers) ? parsed.suppliers : seedSuppliers;
-    const invoices = Array.isArray(parsed.invoices) ? parsed.invoices : seedInvoices;
-    const notifications = Array.isArray(parsed.notifications)
-      ? parsed.notifications
-      : seedNotifications;
-    const users = Array.isArray(parsed.users) ? parsed.users : seedUsers;
-
-    if (
-      !Array.isArray(parsed.projects) ||
-      !Array.isArray(parsed.suppliers) ||
-      !Array.isArray(parsed.invoices) ||
-      !Array.isArray(parsed.notifications) ||
-      !Array.isArray(parsed.users)
-    ) {
-      migrated = true;
-    }
-
-    const next: DatabaseShape = {
-      tenders,
-      projects,
-      suppliers,
-      invoices,
-      notifications,
-      users
-    };
-
-    if (migrated) {
-      persist(next);
-    }
-
-    return next;
-  }
-
-  const db: DatabaseShape = {
-    tenders: seedTenders.map((tender) => normalizeTenderRecord(tender as Tender)),
-    projects: seedProjects,
-    suppliers: seedSuppliers,
-    invoices: seedInvoices,
-    notifications: seedNotifications,
-    users: seedUsers
-  };
-
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
-  return db;
-}
-
-function persist(db: DatabaseShape) {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
-}
-
 const generateId = (prefix: string) => prefixedRandomId(prefix);
 
 export async function fetchDashboard() {
@@ -452,6 +381,77 @@ const mergeSiteVisit = (
 
   return next;
 };
+
+function loadDatabase(): DatabaseShape {
+  const stored = window.localStorage.getItem(STORAGE_KEY);
+  if (stored) {
+    const parsed = JSON.parse(stored) as Partial<DatabaseShape>;
+    let migrated = false;
+
+    const storedTenders = Array.isArray(parsed.tenders) ? parsed.tenders : undefined;
+    const tendersSource = storedTenders ?? seedTenders;
+    if (!storedTenders) {
+      migrated = true;
+    }
+
+    const tenders = tendersSource.map((tender) => {
+      const normalized = normalizeTenderRecord(tender as Tender);
+      if (!migrated && JSON.stringify(tender) !== JSON.stringify(normalized)) {
+        migrated = true;
+      }
+      return normalized;
+    });
+
+    const projects = Array.isArray(parsed.projects) ? parsed.projects : seedProjects;
+    const suppliers = Array.isArray(parsed.suppliers) ? parsed.suppliers : seedSuppliers;
+    const invoices = Array.isArray(parsed.invoices) ? parsed.invoices : seedInvoices;
+    const notifications = Array.isArray(parsed.notifications)
+      ? parsed.notifications
+      : seedNotifications;
+    const users = Array.isArray(parsed.users) ? parsed.users : seedUsers;
+
+    if (
+      !Array.isArray(parsed.projects) ||
+      !Array.isArray(parsed.suppliers) ||
+      !Array.isArray(parsed.invoices) ||
+      !Array.isArray(parsed.notifications) ||
+      !Array.isArray(parsed.users)
+    ) {
+      migrated = true;
+    }
+
+    const next: DatabaseShape = {
+      tenders,
+      projects,
+      suppliers,
+      invoices,
+      notifications,
+      users
+    };
+
+    if (migrated) {
+      persist(next);
+    }
+
+    return next;
+  }
+
+  const db: DatabaseShape = {
+    tenders: seedTenders.map((tender) => normalizeTenderRecord(tender as Tender)),
+    projects: seedProjects,
+    suppliers: seedSuppliers,
+    invoices: seedInvoices,
+    notifications: seedNotifications,
+    users: seedUsers
+  };
+
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+  return db;
+}
+
+function persist(db: DatabaseShape) {
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+}
 
 let database = loadDatabase();
 
