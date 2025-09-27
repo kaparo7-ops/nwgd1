@@ -18,23 +18,36 @@ const resolveCrypto = (scope: CryptoContainer | undefined): Crypto | undefined =
   return typeof candidate === "object" && candidate !== null ? candidate : undefined;
 };
 
-const getCrypto = (): Crypto | undefined => {
-  const scopes: (CryptoContainer | undefined)[] = [
-    typeof globalThis !== "undefined" ? (globalThis as CryptoContainer) : undefined,
-    typeof self !== "undefined" ? (self as CryptoContainer) : undefined,
-    typeof window !== "undefined" ? (window as CryptoContainer) : undefined,
-    typeof global !== "undefined" ? (global as CryptoContainer) : undefined
-  ];
-
-  for (const scope of scopes) {
+const collectCryptoCandidates = (): Crypto[] => {
+  const candidates: Crypto[] = [];
+  const seen = new Set<Crypto>();
+  const addCandidate = (scope: CryptoContainer | undefined): void => {
     const crypto = resolveCrypto(scope);
-    if (crypto) {
-      return crypto;
+
+    if (crypto && !seen.has(crypto)) {
+      seen.add(crypto);
+      candidates.push(crypto);
     }
+  };
+
+  const globalScope =
+    typeof globalThis !== "undefined" ? (globalThis as CryptoContainer) : undefined;
+
+  addCandidate(globalScope);
+  addCandidate(typeof self !== "undefined" ? (self as CryptoContainer) : undefined);
+  addCandidate(typeof window !== "undefined" ? (window as CryptoContainer) : undefined);
+
+  const msCrypto = globalScope?.msCrypto;
+  if (typeof msCrypto === "object" && msCrypto) {
+    addCandidate({ crypto: msCrypto });
   }
 
-  return undefined;
+  addCandidate(typeof global !== "undefined" ? (global as CryptoContainer) : undefined);
+
+  return candidates;
 };
+
+const getCrypto = (): Crypto | undefined => collectCryptoCandidates()[0];
 
 const fallbackWithCrypto = (crypto: Crypto): string => {
   const bytes = new Uint8Array(16);
@@ -99,18 +112,22 @@ const fallbackWithMathRandom = (): string => {
  * `crypto.randomUUID` is unavailable (e.g. legacy browsers).
  */
 export const ensureCryptoRandomUUID = (): void => {
-  const crypto = getCrypto();
+  const candidates = collectCryptoCandidates();
 
-  if (!crypto || typeof crypto.randomUUID === "function") {
-    return;
+  for (const crypto of candidates) {
+    const candidate = crypto as Crypto & { randomUUID?: () => string };
+
+    if (typeof candidate.randomUUID === "function") {
+      continue;
+    }
+
+    const polyfill =
+      typeof crypto.getRandomValues === "function"
+        ? () => fallbackWithCrypto(crypto)
+        : fallbackWithMathRandom;
+
+    candidate.randomUUID = polyfill;
   }
-
-  const polyfill =
-    typeof crypto.getRandomValues === "function"
-      ? () => fallbackWithCrypto(crypto)
-      : fallbackWithMathRandom;
-
-  (crypto as Crypto & { randomUUID: () => string }).randomUUID = polyfill;
 };
 
 export const safeRandomUUID = (): string => {
