@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/filters/inputs";
 import { useToast } from "@/components/ui/toast";
 import { useLanguage } from "@/providers/language-provider";
+import { safeRandomUUID } from "@/utils/random";
 
 export type FilterOption = { value: string; label: string };
 
@@ -62,7 +63,7 @@ export function FiltersDrawer({ availableFilters, value, onChange }: FiltersDraw
   const handleSavePreset = () => {
     const name = prompt(locale === "ar" ? "اسم المرشح" : "Preset name");
     if (!name) return;
-    const preset: Preset = { id: crypto.randomUUID(), name, filters: value };
+    const preset: Preset = { id: safeRandomUUID(), name, filters: value };
     const next = [...presets, preset];
     window.localStorage.setItem(PRESET_KEY, JSON.stringify(next));
     setPresets(next);

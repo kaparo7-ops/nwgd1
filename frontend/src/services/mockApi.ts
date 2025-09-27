@@ -20,6 +20,7 @@ import type {
   SpecificationBook,
   Supplier,
   Tender,
+  TenderAlerts,
   TenderAiComparison,
   TenderAiInsights,
   TenderAiRequirement,
@@ -40,6 +41,7 @@ import {
   createMockAiSummary,
   extractAiContext
 } from "@/utils/mockAi";
+import { prefixedRandomId } from "@/utils/random";
 
 const STORAGE_KEY = "tender-portal-demo";
 
@@ -57,11 +59,6 @@ const latency = (min = 200, max = 650) =>
 
 const isoNow = () => new Date().toISOString();
 
-const fallbackRandomId = (prefix: string) =>
-  typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? `${prefix}-${crypto.randomUUID()}`
-    : `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
-
 const normalizeAiSummary = (summary?: Partial<TenderAiSummary>): TenderAiSummary => ({
   overview: summary?.overview ?? "",
   highlights: summary?.highlights ?? [],
@@ -72,7 +69,7 @@ const normalizeAiSummary = (summary?: Partial<TenderAiSummary>): TenderAiSummary
 const normalizeAiRequirement = (
   requirement?: Partial<TenderAiRequirement>
 ): TenderAiRequirement => ({
-  id: requirement?.id ?? fallbackRandomId("ai-req"),
+  id: requirement?.id ?? prefixedRandomId("ai-req"),
   title: requirement?.title ?? "",
   detail: requirement?.detail ?? "",
   status: requirement?.status ?? "in-progress",
@@ -84,7 +81,7 @@ const normalizeAiRequirement = (
 const normalizeAiComparison = (
   comparison?: Partial<TenderAiComparison>
 ): TenderAiComparison => ({
-  id: comparison?.id ?? fallbackRandomId("ai-cmp"),
+  id: comparison?.id ?? prefixedRandomId("ai-cmp"),
   topic: comparison?.topic ?? "",
   winner: comparison?.winner ?? "",
   rationale: comparison?.rationale ?? "",
@@ -93,7 +90,7 @@ const normalizeAiComparison = (
 });
 
 const normalizeAiRisk = (risk?: Partial<TenderAiRiskAssessment>): TenderAiRiskAssessment => ({
-  id: risk?.id ?? fallbackRandomId("ai-risk"),
+  id: risk?.id ?? prefixedRandomId("ai-risk"),
   title: risk?.title ?? "",
   level: risk?.level ?? "medium",
   impact: risk?.impact ?? "",
@@ -164,90 +161,44 @@ const normalizeSpecificationBooks = (
   books?: SpecificationBookInput[]
 ): SpecificationBook[] => (books ?? []).map(normalizeSpecificationBook);
 
-function loadDatabase(): DatabaseShape {
-  const stored = window.localStorage.getItem(STORAGE_KEY);
-  if (stored) {
-    const parsed = JSON.parse(stored) as DatabaseShape;
-    parsed.tenders = parsed.tenders.map((tender) => {
-      const normalized = {
-        ...tender,
-        specificationBooks: normalizeSpecificationBooks(tender.specificationBooks),
-        pricing: normalizePricing(tender.pricing)
-      } as Tender;
-      return { ...normalized, aiInsights: ensureAiInsights(normalized) };
-    });
-    return parsed;
-  }
-
-  const db: DatabaseShape = {
-    tenders: seedTenders.map((tender) => {
-      const normalized = {
-        ...tender,
-        specificationBooks: normalizeSpecificationBooks(tender.specificationBooks),
-        pricing: normalizePricing(tender.pricing)
-      } as Tender;
-      return { ...normalized, aiInsights: ensureAiInsights(normalized) };
-    }),
-    projects: seedProjects,
-    suppliers: seedSuppliers,
-    invoices: seedInvoices,
-    notifications: seedNotifications,
-    users: seedUsers
-  };
-
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
-  return db;
-}
-
-function persist(db: DatabaseShape) {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
-}
-
-let database = loadDatabase();
-
-window.addEventListener("storage", (event) => {
-  if (event.key === STORAGE_KEY && event.newValue) {
-    const parsed = JSON.parse(event.newValue) as DatabaseShape;
-    parsed.tenders = parsed.tenders.map((tender) => {
-      const normalized = {
-        ...tender,
-        specificationBooks: normalizeSpecificationBooks(tender.specificationBooks),
-        pricing: normalizePricing(tender.pricing)
-      } as Tender;
-      return { ...normalized, aiInsights: ensureAiInsights(normalized) };
-    });
-    database = parsed;
-  }
+const defaultTenderAlerts = (): TenderAlerts => ({
+  submissionReminderAt: null,
+  needsSpecificationPurchase: true,
+  siteVisitOverdue: false,
+  guaranteeAlert: null
 });
 
-const generateId = (prefix: string) => `${prefix}-${crypto.randomUUID()}`;
+const normalizeTenderRecord = (tender: Tender): Tender => {
+  const normalizedSiteVisit = tender.siteVisit
+    ? {
+        ...tender.siteVisit,
+        photos: Array.isArray(tender.siteVisit.photos) ? tender.siteVisit.photos : []
+      }
+    : undefined;
 
-export async function fetchDashboard() {
-  await latency();
-  return {
-    metrics: dashboardMetrics,
-    pipeline: pipelineBreakdown,
-    cashflow,
-    notifications: database.notifications
-  } as {
-    metrics: DashboardMetric[];
-    pipeline: PipelineBreakdown[];
-    cashflow: CashflowPoint[];
-    notifications: Notification[];
+  const normalized: Tender = {
+    ...tender,
+    tags: Array.isArray(tender.tags) ? tender.tags : [],
+    siteVisit: normalizedSiteVisit,
+    specificationBooks: normalizeSpecificationBooks(tender.specificationBooks),
+    proposals: { ...(tender.proposals ?? {}) },
+    attachments: Array.isArray(tender.attachments) ? tender.attachments : [],
+    links: Array.isArray(tender.links) ? tender.links : [],
+    timeline: Array.isArray(tender.timeline) ? tender.timeline : [],
+    pricing: normalizePricing(tender.pricing),
+    supplierComparisons: Array.isArray(tender.supplierComparisons)
+      ? tender.supplierComparisons
+      : [],
+    alerts: {
+      ...defaultTenderAlerts(),
+      ...(tender.alerts ?? {})
+    },
+    description: tender.description ?? ""
   };
-}
 
-export async function listTenders(): Promise<Tender[]> {
-  await latency();
-  return [...database.tenders].sort((a, b) =>
-    b.createdAt.localeCompare(a.createdAt)
-  );
-}
+  return { ...normalized, aiInsights: ensureAiInsights(normalized) };
+};
 
-export async function getTender(id: string): Promise<Tender | undefined> {
-  await latency();
-  return database.tenders.find((tender) => tender.id === id);
-}
 
 const createEmptySummary = (): TenderPricingSummary => ({
   subtotalUsd: 0,
@@ -367,41 +318,126 @@ const mergePricing = (existing: TenderPricing, incoming?: Partial<TenderPricing>
   };
 };
 
-const mergeSiteVisit = (
-  existing?: TenderSiteVisit,
-  incoming?: Partial<TenderSiteVisit>
-): TenderSiteVisit | undefined => {
-  if (!existing && !incoming) return undefined;
 
-  const has = (key: keyof TenderSiteVisit) =>
-    incoming ? Object.prototype.hasOwnProperty.call(incoming, key) : false;
+function loadDatabase(): DatabaseShape {
+  const stored = window.localStorage.getItem(STORAGE_KEY);
+  if (stored) {
+    const parsed = JSON.parse(stored) as Partial<DatabaseShape>;
+    let migrated = false;
 
-  const next: TenderSiteVisit = {
-    required: has("required")
-      ? Boolean(incoming?.required)
-      : existing?.required ?? false,
-    completed: has("completed")
-      ? Boolean(incoming?.completed)
-      : existing?.completed ?? false,
-    photos: incoming?.photos ? [...incoming.photos] : [...(existing?.photos ?? [])],
-    date: has("date") ? incoming?.date ?? null : existing?.date ?? null,
-    assignee: has("assignee") ? incoming?.assignee : existing?.assignee,
-    notes: has("notes") ? incoming?.notes : existing?.notes
-  };
+    const storedTenders = Array.isArray(parsed.tenders) ? parsed.tenders : undefined;
+    const tendersSource = storedTenders ?? seedTenders;
+    if (!storedTenders) {
+      migrated = true;
+    }
 
-  if (
-    !next.required &&
-    !next.completed &&
-    !next.date &&
-    !next.assignee &&
-    !next.notes &&
-    next.photos.length === 0
-  ) {
-    return undefined;
+    const tenders = tendersSource.map((tender) => {
+      const normalized = normalizeTenderRecord(tender as Tender);
+      if (!migrated && JSON.stringify(tender) !== JSON.stringify(normalized)) {
+        migrated = true;
+      }
+      return normalized;
+    });
+
+    const projects = Array.isArray(parsed.projects) ? parsed.projects : seedProjects;
+    const suppliers = Array.isArray(parsed.suppliers) ? parsed.suppliers : seedSuppliers;
+    const invoices = Array.isArray(parsed.invoices) ? parsed.invoices : seedInvoices;
+    const notifications = Array.isArray(parsed.notifications)
+      ? parsed.notifications
+      : seedNotifications;
+    const users = Array.isArray(parsed.users) ? parsed.users : seedUsers;
+
+    if (
+      !Array.isArray(parsed.projects) ||
+      !Array.isArray(parsed.suppliers) ||
+      !Array.isArray(parsed.invoices) ||
+      !Array.isArray(parsed.notifications) ||
+      !Array.isArray(parsed.users)
+    ) {
+      migrated = true;
+    }
+
+    const next: DatabaseShape = {
+      tenders,
+      projects,
+      suppliers,
+      invoices,
+      notifications,
+      users
+    };
+
+    if (migrated) {
+      persist(next);
+    }
+
+    return next;
   }
 
-  return next;
-};
+  const db: DatabaseShape = {
+    tenders: seedTenders.map((tender) => normalizeTenderRecord(tender as Tender)),
+    projects: seedProjects,
+    suppliers: seedSuppliers,
+    invoices: seedInvoices,
+    notifications: seedNotifications,
+    users: seedUsers
+  };
+
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+  return db;
+}
+
+function persist(db: DatabaseShape) {
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+}
+
+let database = loadDatabase();
+
+window.addEventListener("storage", (event) => {
+  if (event.key === STORAGE_KEY && event.newValue) {
+    const parsed = JSON.parse(event.newValue) as Partial<DatabaseShape>;
+    database = {
+      tenders: (Array.isArray(parsed.tenders) ? parsed.tenders : seedTenders).map((tender) =>
+        normalizeTenderRecord(tender as Tender)
+      ),
+      projects: Array.isArray(parsed.projects) ? parsed.projects : seedProjects,
+      suppliers: Array.isArray(parsed.suppliers) ? parsed.suppliers : seedSuppliers,
+      invoices: Array.isArray(parsed.invoices) ? parsed.invoices : seedInvoices,
+      notifications: Array.isArray(parsed.notifications)
+        ? parsed.notifications
+        : seedNotifications,
+      users: Array.isArray(parsed.users) ? parsed.users : seedUsers
+    };
+  }
+});
+
+const generateId = (prefix: string) => prefixedRandomId(prefix);
+
+export async function fetchDashboard() {
+  await latency();
+  return {
+    metrics: dashboardMetrics,
+    pipeline: pipelineBreakdown,
+    cashflow,
+    notifications: database.notifications
+  } as {
+    metrics: DashboardMetric[];
+    pipeline: PipelineBreakdown[];
+    cashflow: CashflowPoint[];
+    notifications: Notification[];
+  };
+}
+
+export async function listTenders(): Promise<Tender[]> {
+  await latency();
+  return [...database.tenders].sort((a, b) =>
+    b.createdAt.localeCompare(a.createdAt)
+  );
+}
+
+export async function getTender(id: string): Promise<Tender | undefined> {
+  await latency();
+  return database.tenders.find((tender) => tender.id === id);
+}
 
 export async function saveTender(
   tender: Partial<Tender> & { title?: string }
@@ -1004,11 +1040,7 @@ export async function saveInvoice(invoice: Partial<Invoice> & { amount: number }
 export async function resetDemo() {
   await latency(50, 90);
   database = {
-    tenders: seedTenders.map((tender) => ({
-      ...tender,
-      specificationBooks: normalizeSpecificationBooks(tender.specificationBooks),
-      pricing: normalizePricing(tender.pricing)
-    })),
+    tenders: seedTenders.map((tender) => normalizeTenderRecord(tender as Tender)),
     projects: seedProjects,
     suppliers: seedSuppliers,
     invoices: seedInvoices,
