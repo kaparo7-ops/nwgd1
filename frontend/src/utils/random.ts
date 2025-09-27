@@ -21,7 +21,6 @@ function resolveCrypto(scope: CryptoContainer | undefined): Crypto | undefined {
 function collectCryptoCandidates(): Crypto[] {
   const candidates: Crypto[] = [];
   const seen = new Set<Crypto>();
-
   const addCandidate = (scope: CryptoContainer | undefined): void => {
     const crypto = resolveCrypto(scope);
 
@@ -51,6 +50,7 @@ function collectCryptoCandidates(): Crypto[] {
 function getCrypto(): Crypto | undefined {
   return collectCryptoCandidates()[0];
 }
+
 
 function fallbackWithCrypto(crypto: Crypto): string {
   const bytes = new Uint8Array(16);
