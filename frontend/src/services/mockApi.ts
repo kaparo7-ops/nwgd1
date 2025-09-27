@@ -199,35 +199,6 @@ const normalizeTenderRecord = (tender: Tender): Tender => {
   return { ...normalized, aiInsights: ensureAiInsights(normalized) };
 };
 
-const generateId = (prefix: string) => prefixedRandomId(prefix);
-
-export async function fetchDashboard() {
-  await latency();
-  return {
-    metrics: dashboardMetrics,
-    pipeline: pipelineBreakdown,
-    cashflow,
-    notifications: database.notifications
-  } as {
-    metrics: DashboardMetric[];
-    pipeline: PipelineBreakdown[];
-    cashflow: CashflowPoint[];
-    notifications: Notification[];
-  };
-}
-
-export async function listTenders(): Promise<Tender[]> {
-  await latency();
-  return [...database.tenders].sort((a, b) =>
-    b.createdAt.localeCompare(a.createdAt)
-  );
-}
-
-export async function getTender(id: string): Promise<Tender | undefined> {
-  await latency();
-  return database.tenders.find((tender) => tender.id === id);
-}
-
 function createEmptySummary(): TenderPricingSummary {
   return {
     subtotalUsd: 0,
@@ -459,6 +430,8 @@ function persist(db: DatabaseShape) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
 }
 
+const generateId = (prefix: string) => prefixedRandomId(prefix);
+
 let database = loadDatabase();
 
 window.addEventListener("storage", (event) => {
@@ -478,6 +451,33 @@ window.addEventListener("storage", (event) => {
     };
   }
 });
+
+export async function fetchDashboard() {
+  await latency();
+  return {
+    metrics: dashboardMetrics,
+    pipeline: pipelineBreakdown,
+    cashflow,
+    notifications: database.notifications
+  } as {
+    metrics: DashboardMetric[];
+    pipeline: PipelineBreakdown[];
+    cashflow: CashflowPoint[];
+    notifications: Notification[];
+  };
+}
+
+export async function listTenders(): Promise<Tender[]> {
+  await latency();
+  return [...database.tenders].sort((a, b) =>
+    b.createdAt.localeCompare(a.createdAt)
+  );
+}
+
+export async function getTender(id: string): Promise<Tender | undefined> {
+  await latency();
+  return database.tenders.find((tender) => tender.id === id);
+}
 
 export async function saveTender(
   tender: Partial<Tender> & { title?: string }
