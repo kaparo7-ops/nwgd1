@@ -199,6 +199,195 @@ const normalizeTenderRecord = (tender: Tender): Tender => {
   return { ...normalized, aiInsights: ensureAiInsights(normalized) };
 };
 
+const generateId = (prefix: string) => prefixedRandomId(prefix);
+
+export async function fetchDashboard() {
+  await latency();
+  return {
+    metrics: dashboardMetrics,
+    pipeline: pipelineBreakdown,
+    cashflow,
+    notifications: database.notifications
+  } as {
+    metrics: DashboardMetric[];
+    pipeline: PipelineBreakdown[];
+    cashflow: CashflowPoint[];
+    notifications: Notification[];
+  };
+}
+
+export async function listTenders(): Promise<Tender[]> {
+  await latency();
+  return [...database.tenders].sort((a, b) =>
+    b.createdAt.localeCompare(a.createdAt)
+  );
+}
+
+export async function getTender(id: string): Promise<Tender | undefined> {
+  await latency();
+  return database.tenders.find((tender) => tender.id === id);
+}
+
+function createEmptySummary(): TenderPricingSummary {
+  return {
+    subtotalUsd: 0,
+    subtotalLyd: 0,
+    marginUsd: 0,
+    marginLyd: 0,
+    shippingUsd: 0,
+    shippingLyd: 0,
+    totalUsd: 0,
+    totalLyd: 0,
+    fxMissing: false
+  } satisfies TenderPricingSummary;
+}
+
+function summarizePricing(lines: TenderPricingLine[]): TenderPricingSummary {
+  const sum = (key: keyof TenderPricingLine) =>
+    lines.reduce((acc, line) => acc + (typeof line[key] === "number" ? (line[key] as number) : 0), 0);
+
+  return {
+    subtotalUsd: sum("subtotalUsd"),
+    subtotalLyd: sum("subtotalLyd"),
+    marginUsd: sum("marginUsd"),
+    marginLyd: sum("marginLyd"),
+    shippingUsd: sum("shippingUsd"),
+    shippingLyd: sum("shippingLyd"),
+    totalUsd: sum("totalUsd"),
+    totalLyd: sum("totalLyd"),
+    fxMissing: lines.some((line) => line.fxRate === null)
+  } satisfies TenderPricingSummary;
+}
+
+function defaultPricing(): TenderPricing {
+  return {
+    lines: [],
+    summary: createEmptySummary()
+  };
+}
+
+function normalizePricingLine(
+  line: Partial<TenderPricingLine> & { id: string; item: string }
+): TenderPricingLine {
+  if (typeof line.unitCostUsd === "number" && typeof line.subtotalUsd === "number") {
+    const normalized: TenderPricingLine = {
+      id: line.id,
+      item: line.item,
+      quantity: line.quantity ?? 0,
+      unitCostUsd: line.unitCostUsd ?? 0,
+      unitCostLyd: line.unitCostLyd ?? 0,
+      fxRate: typeof line.fxRate === "number" && Number.isFinite(line.fxRate) ? line.fxRate : null,
+      marginPercent: line.marginPercent ?? 0,
+      marginUsd: line.marginUsd ?? 0,
+      marginLyd: line.marginLyd ?? 0,
+      shippingUsd: line.shippingUsd ?? 0,
+      shippingLyd: line.shippingLyd ?? 0,
+      subtotalUsd: line.subtotalUsd ?? 0,
+      subtotalLyd: line.subtotalLyd ?? 0,
+      totalUsd: line.totalUsd ?? 0,
+      totalLyd: line.totalLyd ?? 0,
+      supplier: line.supplier
+    };
+    return normalized;
+  }
+
+  const quantity = Number.isFinite(Number(line.quantity)) ? Number(line.quantity) : 0;
+  const unitCostUsd = Number.isFinite(Number((line as any).unitCost))
+    ? Number((line as any).unitCost)
+    : 0;
+  const marginPercent = Number.isFinite(Number((line as any).margin)) ? Number((line as any).margin) : 0;
+  const shippingUsd = Number.isFinite(Number((line as any).shipping)) ? Number((line as any).shipping) : 0;
+  const subtotalUsd = unitCostUsd * quantity;
+  const marginUsd = subtotalUsd * (marginPercent / 100);
+  const totalUsd = subtotalUsd + marginUsd + shippingUsd;
+
+  return {
+    id: line.id,
+    item: line.item,
+    quantity,
+    unitCostUsd,
+    unitCostLyd: 0,
+    fxRate: null,
+    marginPercent,
+    marginUsd,
+    marginLyd: 0,
+    shippingUsd,
+    shippingLyd: 0,
+    subtotalUsd,
+    subtotalLyd: 0,
+    totalUsd,
+    totalLyd: 0,
+    supplier: line.supplier
+  };
+}
+
+function normalizePricing(pricing?: Partial<TenderPricing> & { lines?: any[] }): TenderPricing {
+  if (!pricing) {
+    return defaultPricing();
+  }
+
+  const lines: TenderPricingLine[] = Array.isArray(pricing.lines)
+    ? pricing.lines
+        .filter((line): line is Partial<TenderPricingLine> & { id: string; item: string } =>
+          Boolean(line?.id) && Boolean(line?.item)
+        )
+        .map((line) => normalizePricingLine(line))
+    : [];
+
+  return {
+    lines,
+    summary: summarizePricing(lines)
+  };
+}
+
+function mergePricing(existing: TenderPricing, incoming?: Partial<TenderPricing>): TenderPricing {
+  if (!incoming) {
+    return existing;
+  }
+  const normalizedIncoming = normalizePricing(incoming);
+  const lines = normalizedIncoming.lines.length > 0 ? normalizedIncoming.lines : existing.lines;
+  return {
+    lines,
+    summary: summarizePricing(lines)
+  };
+}
+
+const mergeSiteVisit = (
+  existing?: TenderSiteVisit,
+  incoming?: Partial<TenderSiteVisit>
+): TenderSiteVisit | undefined => {
+  if (!existing && !incoming) return undefined;
+
+  const has = (key: keyof TenderSiteVisit) =>
+    incoming ? Object.prototype.hasOwnProperty.call(incoming, key) : false;
+
+  const next: TenderSiteVisit = {
+    required: has("required")
+      ? Boolean(incoming?.required)
+      : existing?.required ?? false,
+    completed: has("completed")
+      ? Boolean(incoming?.completed)
+      : existing?.completed ?? false,
+    photos: incoming?.photos ? [...incoming.photos] : [...(existing?.photos ?? [])],
+    date: has("date") ? incoming?.date ?? null : existing?.date ?? null,
+    assignee: has("assignee") ? incoming?.assignee : existing?.assignee,
+    notes: has("notes") ? incoming?.notes : existing?.notes
+  };
+
+  if (
+    !next.required &&
+    !next.completed &&
+    !next.date &&
+    !next.assignee &&
+    !next.notes &&
+    next.photos.length === 0
+  ) {
+    return undefined;
+  }
+
+  return next;
+};
+
 function loadDatabase(): DatabaseShape {
   const stored = window.localStorage.getItem(STORAGE_KEY);
   if (stored) {
@@ -269,189 +458,6 @@ function loadDatabase(): DatabaseShape {
 function persist(db: DatabaseShape) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
 }
-
-const generateId = (prefix: string) => prefixedRandomId(prefix);
-
-export async function fetchDashboard() {
-  await latency();
-  return {
-    metrics: dashboardMetrics,
-    pipeline: pipelineBreakdown,
-    cashflow,
-    notifications: database.notifications
-  } as {
-    metrics: DashboardMetric[];
-    pipeline: PipelineBreakdown[];
-    cashflow: CashflowPoint[];
-    notifications: Notification[];
-  };
-}
-
-export async function listTenders(): Promise<Tender[]> {
-  await latency();
-  return [...database.tenders].sort((a, b) =>
-    b.createdAt.localeCompare(a.createdAt)
-  );
-}
-
-export async function getTender(id: string): Promise<Tender | undefined> {
-  await latency();
-  return database.tenders.find((tender) => tender.id === id);
-}
-
-const createEmptySummary = (): TenderPricingSummary => ({
-  subtotalUsd: 0,
-  subtotalLyd: 0,
-  marginUsd: 0,
-  marginLyd: 0,
-  shippingUsd: 0,
-  shippingLyd: 0,
-  totalUsd: 0,
-  totalLyd: 0,
-  fxMissing: false
-});
-
-const summarizePricing = (lines: TenderPricingLine[]): TenderPricingSummary => {
-  const sum = (key: keyof TenderPricingLine) =>
-    lines.reduce((acc, line) => acc + (typeof line[key] === "number" ? (line[key] as number) : 0), 0);
-
-  return {
-    subtotalUsd: sum("subtotalUsd"),
-    subtotalLyd: sum("subtotalLyd"),
-    marginUsd: sum("marginUsd"),
-    marginLyd: sum("marginLyd"),
-    shippingUsd: sum("shippingUsd"),
-    shippingLyd: sum("shippingLyd"),
-    totalUsd: sum("totalUsd"),
-    totalLyd: sum("totalLyd"),
-    fxMissing: lines.some((line) => line.fxRate === null)
-  } satisfies TenderPricingSummary;
-};
-
-const defaultPricing = (): TenderPricing => ({
-  lines: [],
-  summary: createEmptySummary()
-});
-
-const normalizePricingLine = (line: Partial<TenderPricingLine> & { id: string; item: string }): TenderPricingLine => {
-  if (typeof line.unitCostUsd === "number" && typeof line.subtotalUsd === "number") {
-    const normalized: TenderPricingLine = {
-      id: line.id,
-      item: line.item,
-      quantity: line.quantity ?? 0,
-      unitCostUsd: line.unitCostUsd ?? 0,
-      unitCostLyd: line.unitCostLyd ?? 0,
-      fxRate: typeof line.fxRate === "number" && Number.isFinite(line.fxRate) ? line.fxRate : null,
-      marginPercent: line.marginPercent ?? 0,
-      marginUsd: line.marginUsd ?? 0,
-      marginLyd: line.marginLyd ?? 0,
-      shippingUsd: line.shippingUsd ?? 0,
-      shippingLyd: line.shippingLyd ?? 0,
-      subtotalUsd: line.subtotalUsd ?? 0,
-      subtotalLyd: line.subtotalLyd ?? 0,
-      totalUsd: line.totalUsd ?? 0,
-      totalLyd: line.totalLyd ?? 0,
-      supplier: line.supplier
-    };
-    return normalized;
-  }
-
-  const quantity = Number.isFinite(Number(line.quantity)) ? Number(line.quantity) : 0;
-  const unitCostUsd = Number.isFinite(Number((line as any).unitCost))
-    ? Number((line as any).unitCost)
-    : 0;
-  const marginPercent = Number.isFinite(Number((line as any).margin)) ? Number((line as any).margin) : 0;
-  const shippingUsd = Number.isFinite(Number((line as any).shipping)) ? Number((line as any).shipping) : 0;
-  const subtotalUsd = unitCostUsd * quantity;
-  const marginUsd = subtotalUsd * (marginPercent / 100);
-  const totalUsd = subtotalUsd + marginUsd + shippingUsd;
-
-  return {
-    id: line.id,
-    item: line.item,
-    quantity,
-    unitCostUsd,
-    unitCostLyd: 0,
-    fxRate: null,
-    marginPercent,
-    marginUsd,
-    marginLyd: 0,
-    shippingUsd,
-    shippingLyd: 0,
-    subtotalUsd,
-    subtotalLyd: 0,
-    totalUsd,
-    totalLyd: 0,
-    supplier: line.supplier
-  };
-};
-
-const normalizePricing = (pricing?: Partial<TenderPricing> & { lines?: any[] }): TenderPricing => {
-  if (!pricing) {
-    return defaultPricing();
-  }
-
-  const lines: TenderPricingLine[] = Array.isArray(pricing.lines)
-    ? pricing.lines
-        .filter((line): line is Partial<TenderPricingLine> & { id: string; item: string } =>
-          Boolean(line?.id) && Boolean(line?.item)
-        )
-        .map((line) => normalizePricingLine(line))
-    : [];
-
-  return {
-    lines,
-    summary: summarizePricing(lines)
-  };
-};
-
-const mergePricing = (existing: TenderPricing, incoming?: Partial<TenderPricing>): TenderPricing => {
-  if (!incoming) {
-    return existing;
-  }
-  const normalizedIncoming = normalizePricing(incoming);
-  const lines = normalizedIncoming.lines.length > 0 ? normalizedIncoming.lines : existing.lines;
-  return {
-    lines,
-    summary: summarizePricing(lines)
-  };
-};
-
-const mergeSiteVisit = (
-  existing?: TenderSiteVisit,
-  incoming?: Partial<TenderSiteVisit>
-): TenderSiteVisit | undefined => {
-  if (!existing && !incoming) return undefined;
-
-  const has = (key: keyof TenderSiteVisit) =>
-    incoming ? Object.prototype.hasOwnProperty.call(incoming, key) : false;
-
-  const next: TenderSiteVisit = {
-    required: has("required")
-      ? Boolean(incoming?.required)
-      : existing?.required ?? false,
-    completed: has("completed")
-      ? Boolean(incoming?.completed)
-      : existing?.completed ?? false,
-    photos: incoming?.photos ? [...incoming.photos] : [...(existing?.photos ?? [])],
-    date: has("date") ? incoming?.date ?? null : existing?.date ?? null,
-    assignee: has("assignee") ? incoming?.assignee : existing?.assignee,
-    notes: has("notes") ? incoming?.notes : existing?.notes
-  };
-
-  if (
-    !next.required &&
-    !next.completed &&
-    !next.date &&
-    !next.assignee &&
-    !next.notes &&
-    next.photos.length === 0
-  ) {
-    return undefined;
-  }
-
-  return next;
-};
 
 let database = loadDatabase();
 
